@@ -1,0 +1,31 @@
+START HERE
+==========
+
+This program applies to jobs for you (Naukri, and experimentally Instahyre, LinkedIn and Indeed).
+You run it from a control panel that opens in your browser. Nothing personal is inside this folder:
+you add your own resume, details and (if you want one) AI key in the control panel, and they are
+saved only on your computer, in the "data" folder next to this file.
+
+1. Unzip it to a short path, for example C:\agent-to-apply on Windows, or ~/agent-to-apply on a Mac.
+   Not into a folder your computer syncs to the cloud, and do not move the folder after the first start.
+
+2. Double-click ONE file:
+
+       Windows :  Start.bat
+       Mac     :  Start.command
+
+   The first start installs everything (a few minutes, internet needed). Every start after that
+   just opens the control panel. Keep the black window it opens in the background while you use it.
+
+   Windows: if it says "Windows protected your PC", click "More info", then "Run anyway".
+   Mac:     once, before the first start, open Terminal and paste these three lines
+            (only if you got this zip from someone you trust):
+
+                cd ~/agent-to-apply
+                xattr -dr com.apple.quarantine .
+                chmod +x Start.command setup.sh
+
+3. In the panel, follow steps 1 to 5 from the top. Rehearse (step 4) before you apply for real (step 5),
+   and start with 1 to 3 applications.
+
+Everything else is explained in README.md.

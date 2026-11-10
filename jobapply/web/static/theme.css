@@ -1,0 +1,249 @@
+/* Neumorphism, with the contrast kept honest: text and focus rings are far above WCAG AA, inputs get a real border. */
+:root {
+  color-scheme: light;
+  --bg: #e4e9f0;
+  --text: #1c2733;
+  --muted: #46525f;
+  --accent: #0a4d9c;
+  --danger: #9b1c1c;
+  --ok: #14663a;
+  --warn: #8a4b00;
+  --line: #66737f;
+  --hi: #ffffff;
+  --lo: #b4bdca;
+  --raised: 8px 8px 16px var(--lo), -8px -8px 16px var(--hi);
+  --raised-sm: 5px 5px 10px var(--lo), -5px -5px 10px var(--hi);
+  --inset: inset 5px 5px 10px var(--lo), inset -5px -5px 10px var(--hi);
+  --inset-sm: inset 3px 3px 6px var(--lo), inset -3px -3px 6px var(--hi);
+  --radius: 22px;
+  --focus: 3px solid var(--accent);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 28px 24px 64px; background: var(--bg); color: var(--text);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+h1 { font-size: 2rem; margin: 0; letter-spacing: -.02em; }
+h2 { font-size: 1.2rem; margin: 0 0 .7em; }
+h3 { font-size: 1.08rem; margin: 0; align-self: center; }
+p { margin: .5em 0; }
+a { color: var(--accent); font-weight: 600; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+code { background: transparent; box-shadow: var(--inset-sm); border-radius: 8px; padding: 1px 7px; font-size: .92rem; }
+:focus-visible { outline: var(--focus); outline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: absolute; left: 12px; top: -80px; padding: 10px 16px; background: var(--bg); box-shadow: var(--raised-sm); border-radius: 12px; z-index: 5; }
+.skip:focus { top: 12px; }
+[hidden] { display: none !important; }
+
+/* the shell */
+.top { max-width: 1240px; margin: 0 auto 28px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.top-right { display: flex; gap: 14px; align-items: center; }
+.sub, .hint { color: var(--muted); }
+.hint { font-size: .92rem; }
+.layout { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+.left { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }  /* minmax(0): never grow to the widest child */
+.right { position: sticky; top: 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 28px; align-items: start; }
+.banner { max-width: 1240px; margin: 0 auto 24px; padding: 14px 20px; border: 2px solid var(--warn); border-radius: 14px; }
+
+/* surfaces */
+.card, section, fieldset { background: var(--bg); border: 0; border-radius: var(--radius); box-shadow: var(--raised); padding: 24px 26px; margin: 0; }
+main > section, form > section, form > fieldset, main > fieldset { margin-bottom: 28px; }
+.well, textarea { background: var(--bg); border-radius: 16px; box-shadow: var(--inset); }
+.chip { padding: 8px 16px; border-radius: 999px; box-shadow: var(--inset-sm); font-weight: 600; color: var(--muted); }
+.tag { padding: 3px 12px; font-size: .82rem; }  /* the site a report was made for, small and beside its name */
+.site-options { display: flex; flex-wrap: wrap; gap: 8px 32px; }
+
+/* steps */
+.step { display: grid; grid-template-columns: 46px 1fr; column-gap: 16px; align-content: start; }
+.step > p, .step > .controls { grid-column: 1 / -1; }
+.num { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 1.15rem; box-shadow: var(--inset-sm); color: var(--accent); }
+.step[aria-current="step"] { outline: 3px solid var(--accent); outline-offset: 3px; }
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 12px; }
+.field { width: 100%; }
+.next { font-weight: 650; margin: 18px 0 0; }
+
+/* the status pills */
+.pills { list-style: none; display: flex; flex-wrap: wrap; gap: 14px; margin: 0; padding: 0; }
+.pill { display: inline-flex; gap: 9px; align-items: center; padding: 9px 16px; border-radius: 999px; box-shadow: var(--inset-sm); font-weight: 600; font-size: .93rem; }
+.pill[data-state="ok"] { color: var(--ok); }
+.pill[data-state="warn"] { color: var(--warn); }
+.pill[data-state="off"] { color: var(--muted); }
+.pill { max-width: 100%; }
+.pill .mark { font-weight: 800; flex: none; }
+.pill span:last-child { min-width: 0; overflow-wrap: anywhere; }
+
+/* buttons: raised, pressed in when clicked */
+button, .btn, .button {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px 24px; margin: 0;
+  font: inherit; font-weight: 650; color: var(--text); background: var(--bg); border: 0; border-radius: 16px;
+  box-shadow: var(--raised-sm); cursor: pointer; text-decoration: none; transition: box-shadow .15s ease;
+}
+button:hover, .btn:hover, .button:hover { box-shadow: 7px 7px 14px var(--lo), -7px -7px 14px var(--hi); }
+button:active, .btn:active, .button:active { box-shadow: var(--inset-sm); }
+.btn-primary { color: var(--accent); }
+.btn-danger { color: var(--danger); }
+.btn-small, button.small { min-height: 40px; padding: 6px 18px; font-size: .94rem; }
+
+/* Questions are waiting: the one thing a run cannot go on without, and the button was missed every time. It glows amber and says how
+   many are waiting. The ring stays when motion is turned off (the pulse alone is not the signal) and the count is in the words,
+   so the message does not depend on colour or movement. It only glows while there is something to answer, or it would be wallpaper. */
+.btn[data-waiting] {  /* a tinted fill as well as a ring: the whole button changes, not just its edge (dark text on it is still far above AA) */
+  --glow: #b45309; --glow-soft: rgba(234, 128, 0, .85); --ring: 0 0 0 4px var(--glow);
+  background: #fff3d6; font-weight: 750;
+  box-shadow: var(--raised-sm), var(--ring), 0 0 22px 8px var(--glow-soft); animation: glow 1.4s ease-in-out infinite;
+}
+.btn[data-waiting]:hover { animation: none; box-shadow: 7px 7px 14px var(--lo), -7px -7px 14px var(--hi), var(--ring), 0 0 28px 10px var(--glow-soft); }
+.btn[data-waiting]:active { animation: none; box-shadow: var(--inset-sm), var(--ring); }
+@keyframes glow { 50% { box-shadow: var(--raised-sm), var(--ring), 0 0 42px 18px var(--glow-soft); } }
+button:disabled { color: var(--muted); box-shadow: none; cursor: not-allowed; }
+
+/* the answers you have saved: the question and your answer, with Remove beside them */
+.saved-list > summary { cursor: pointer; font-size: 1.2rem; font-weight: 700; }
+.saved-list > .saved-note, .saved { font-size: .88rem; }  /* it is a long reference list: smaller than the page, still easy to read */
+.saved { list-style: none; margin: 0; padding: 0; }
+.saved li { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--lo); }
+.saved .what { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.saved .q { font-weight: 400; }  /* the question is plain text; your answer under it is the bold part */
+.saved li > form { margin: 0; flex: none; }
+.saved .edit { margin-top: 6px; }
+.saved .edit > summary { display: inline-flex; align-items: center; min-height: 32px; padding: 0 6px; margin-left: -6px; cursor: pointer;
+  color: var(--accent); font-weight: 600; }  /* a text link, but a real target: WCAG 2.2 wants at least 24px each way */
+.saved .edit form { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.saved .edit input[type=text] { flex: 1; min-width: 0; min-height: 40px; padding: 6px 12px; font-size: .94rem; }
+
+/* fields */
+label { display: block; font-weight: 650; margin: 16px 0 6px; }
+.field label { margin-top: 12px; }
+input[type=text], input[type=email], input[type=tel], input[type=number], input[type=password], input[type=file], textarea, select {
+  width: 100%; min-height: 46px; padding: 10px 14px; font: inherit; color: var(--text); background: var(--bg);
+  border: 2px solid var(--line); border-radius: 12px; box-shadow: var(--inset-sm);
+}
+fieldset > fieldset { margin-top: 18px; }  /* the backup AIs: cards inside a card need air between them */
+
+/* A "?" button that explains itself on hover or keyboard focus. No JavaScript: the text is in the page, hidden until then.
+   The text hangs from the bottom edge of the line (list item, heading or paragraph) its button is in: explicit, so it can never
+   cover the button, and never wider than that line, so it can never run off the screen. */
+li, h2, p { position: relative; }
+body { overflow-wrap: anywhere; }  /* a long name or address has no place to break: break it, rather than push the page wider than the screen */
+.help { display: inline-block; margin-left: 8px; vertical-align: middle; font-size: 1rem; font-weight: 400; }
+.help-btn { width: 26px; height: 26px; min-height: 0; padding: 0; border-radius: 50%; font-size: .9rem; font-weight: 700; color: var(--accent); }
+.help-tip {
+  visibility: hidden; position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin-top: 2px; padding: 12px 16px;
+  font-size: .93rem; font-weight: 400; line-height: 1.5; text-align: left; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--raised);
+  transition: visibility 0s linear .3s !important;  /* a short grace before it hides, so a pointer drifting sideways can still reach it; no movement, so fine for reduced motion */
+}
+.help:hover .help-tip, .help:focus-within .help-tip { visibility: visible; transition-delay: 0s !important; }
+/* A dialog scrolls inside itself and ends at the decision, so a bubble opening downward would be cut off at its bottom edge: open upward. */
+dialog .help-tip { top: auto; bottom: 100%; margin: 0 0 2px; }
+ul.topics { margin: 8px 0 0; padding-left: 22px; }
+ul.topics li { margin: 8px 0; }
+input[aria-invalid=true], textarea[aria-invalid=true] { border-color: var(--danger); }
+input[type=checkbox], input[type=radio] { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+.check { display: flex; gap: 12px; align-items: center; margin: 14px 0; font-weight: 500; }
+.check label, .check input + label { margin: 0; font-weight: 500; }
+/* a form section's title as an ordinary heading inside its card (the browser default straddles the card's edge) */
+legend { float: left; width: 100%; margin: 0 0 16px; padding: 0; font-size: 1.15rem; font-weight: 700; }
+legend + * { clear: both; }
+::placeholder { color: var(--muted); opacity: 1; }
+.req { color: var(--muted); font-weight: 400; font-size: .9rem; }
+.skills { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 4px 20px; }  /* each row: the skill, then its years */
+.skills label { font-weight: 500; margin-top: 10px; }
+.skills + button { margin-top: 18px; }
+.aifill .hint { margin-top: 12px; }
+.inline { display: inline; }
+
+/* messages */
+.error { color: var(--danger); font-weight: 650; margin: 8px 0 0; }
+.summary { border: 2px solid var(--danger); }
+.ok { border: 2px solid var(--ok); font-weight: 650; }
+.notice { margin: 0 0 14px; padding: 10px 16px; border-radius: 14px; box-shadow: var(--inset-sm); font-weight: 600; }
+.notice[data-kind="error"] { color: var(--danger); border: 2px solid var(--danger); }
+
+/* the output */
+.console-card { display: flex; flex-direction: column; max-height: calc(100vh - 40px); min-height: 440px; }
+.console-head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 14px; }
+.console-head h2 { margin: 0; }
+.status { margin-left: auto; font-weight: 650; padding: 6px 14px; border-radius: 999px; box-shadow: var(--inset-sm); display: inline-flex; gap: 8px; align-items: center; }
+.status[data-state="running"], .status[data-state="stopping"] { color: var(--accent); }
+.status[data-state="finished"] { color: var(--ok); }
+.status[data-state="failed"] { color: var(--danger); }
+.status[data-state="stopped"] { color: var(--warn); }
+.status[data-state="idle"] { color: var(--muted); }
+.status[data-state="running"]::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(.55); opacity: .5; } }
+.log { flex: 1; min-height: 280px; margin: 0; padding: 16px 18px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.55; }
+/* a report, shown as a page */
+.report { margin-top: 16px; padding: 18px 22px; overflow-wrap: anywhere; line-height: 1.55; }  /* it flows with the page: no scroll box to hide results in */
+.report > :first-child { margin-top: 0; }
+.report h3 { margin: 0 0 12px; font-size: 1.25rem; }
+.report h4 { margin: 22px 0 8px; font-size: 1.05rem; }
+.report h5 { margin: 16px 0 6px; font-size: .95rem; }
+.report p { margin: 0 0 12px; }
+.report ul { margin: 0 0 12px; padding-left: 22px; }
+.report li { margin: 0 0 8px; }
+.report code { padding: 1px 7px; border-radius: 8px; box-shadow: var(--inset-sm); font-size: .88em; }
+.report .table-wrap { margin: 4px 0 14px; overflow-x: auto; }
+.report table { border-collapse: collapse; min-width: 260px; }
+.report th, .report td { padding: 8px 18px 8px 0; text-align: left; border-bottom: 1px solid var(--line); }
+.report th { color: var(--muted); font-size: .85rem; font-weight: 700; }
+.report a { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.reports { list-style: none; display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0 0; padding: 0; }
+.reports li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }  /* a report and its Delete button stay together */
+.reports [data-report] { white-space: nowrap; }  /* a name is never broken in two: on a narrow screen Delete drops below instead */
+/* Unread is told three ways, not by colour alone: a dot, a heavier weight, and the screen-reader name ("..., unread"). */
+.reports .btn[data-read="false"] { color: var(--accent); font-weight: 800; }
+.reports .btn[data-read="false"]::before { content: "\25CF\00a0"; }
+.reports .btn[data-read="true"] { color: var(--muted); font-weight: 500; }
+.reports .btn[aria-expanded="true"] { box-shadow: var(--inset-sm); color: var(--text); font-weight: 700; }  /* the report on show looks pressed in */
+.erase-list { list-style: none; margin: 14px 0 0; padding: 0; }
+.erase-list .check { align-items: flex-start; margin: 12px 0; }
+.erase-name { display: block; font-weight: 650; }
+#erase-summary { margin: 0 0 8px; padding-left: 22px; }
+#erase-result { margin: 16px 0 0; }
+pre { box-shadow: var(--inset-sm); border-radius: 12px; padding: 10px 14px; overflow-x: auto; }
+ol li { margin: .6em 0; }
+
+/* the profile and AI pages: one readable column, lined up with the way back */
+nav.top { max-width: 860px; margin: 0 auto 20px; }
+main.page { max-width: 860px; margin: 0 auto; }
+main.page h1 { margin: 0 0 22px; }
+main.page > p { margin: 0 0 20px; }
+main.page form > button, main.page form > .button, main.page section > form > button { margin-top: 20px; }
+input[type=file]::file-selector-button {
+  margin-right: 14px; padding: 6px 16px; font: inherit; font-weight: 650; color: var(--text); background: var(--bg);
+  border: 0; border-radius: 10px; box-shadow: var(--raised-sm); cursor: pointer;
+}
+
+/* the confirmation */
+dialog { width: min(580px, 92vw); border: 0; border-radius: var(--radius); padding: 28px 30px; background: var(--bg); color: var(--text); box-shadow: var(--raised); }
+dialog::backdrop { background: rgba(28, 39, 51, .6); }
+
+@media (max-width: 980px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .right { position: static; }
+  .console-card { max-height: none; }
+}
+/* leaving: the script drops every component off the bottom of the window, then everything goes and the goodbye shows */
+html.leaving, html.leaving body { overflow: hidden; }
+html.leaving body { pointer-events: none; }
+html.gone body > :not(#goodbye):not(#announce) { display: none; }
+.goodbye { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; }
+.goodbye[hidden] { display: none; }
+.goodbye:focus { outline: none; }
+.goodbye-text { width: fit-content; max-width: 100%; padding: 38px 46px; border-radius: var(--radius); background: var(--bg); box-shadow: var(--raised);
+  font-size: clamp(1.35rem, 3.6vw, 2.1rem); font-weight: 700; line-height: 1.4; animation: arrive .8s ease-out both; }
+.goodbye p { margin: 0; }
+.goodbye .sign { margin-top: .6em; text-align: right; color: var(--accent); }  /* right-aligned to the end of the line above it */
+@keyframes arrive { from { opacity: 0; transform: translateY(24px); } }
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+@media (forced-colors: active) {
+  .btn[data-waiting] { border: 5px solid Highlight; }  /* shadows are gone in this mode: a thick highlighted border takes the glow's place */
+  .card, section, fieldset, .btn, button, .pill, .well, .chip, .status, .num, dialog, pre, .goodbye-text, .help-tip { border: 2px solid CanvasText; box-shadow: none; }
+  .reports .btn[aria-expanded="true"] { border-style: double; border-width: 5px; }  /* no shadows in this mode: a thicker double border says "pressed" */
+  .step[aria-current="step"] { outline: 4px solid Highlight; }
+}

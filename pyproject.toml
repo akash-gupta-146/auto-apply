@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-to-apply"
+version = "0.1.0"
+description = "Apply to matching jobs on Naukri, Instahyre, Wellfound and Indeed with a deterministic engine and near-zero LLM calls."
+requires-python = ">=3.9"
+dependencies = [
+    "playwright>=1.44",
+    "pyyaml>=6",
+    "pypdf>=4",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+jobapply = "jobapply.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["jobapply*"]
+
+[tool.setuptools.package-data]
+"jobapply.web" = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
