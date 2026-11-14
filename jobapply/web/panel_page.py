@@ -6,6 +6,7 @@ from __future__ import annotations
 from html import escape
 
 from ..credit import AUTHOR
+from . import agent_card, ask_card, profile_tab
 from .actions import PORTALS, listed
 from .help import help_button
 
@@ -27,6 +28,13 @@ SUGGESTED_MORE = (
 PRIVACY_RISK = "Tick what you want to delete. This cannot be undone, and applications you already sent stay sent."
 PRIVACY_MORE = ("Everything this program keeps about you is stored on this computer, in the data folder. Deleting is not available "
                 "while a run is going, and it only removes what this program keeps.")
+AGENT_LABEL = "Use the AI agent for jobs the site cannot apply to itself"
+AGENT_RISK = (
+    "A job that applies on the company's own website (or has no apply button the program can use) goes to the AI agent instead of "
+    "being skipped: it opens the company's form, fills it in, and asks you for anything it cannot answer.")
+APPROVAL_LABEL = "Wait for my approval before the agent sends each one"
+APPROVAL_HINT = ("On (recommended): the agent shows you each application, on the AI agent tab, and sends it only after you press Approve. "
+                 "Off: it sends as soon as the form is filled in, without asking you.")
 RECHECK_NONE = "Also re-check jobs skipped earlier (none yet)"  # the script rewrites it with the real number for the chosen site
 # What to tell the person about a site before they use it. A site with no entry here has been proven on the live site.
 SITE_NOTES = {
@@ -36,6 +44,8 @@ SITE_NOTES = {
                 "think before you use it. This only does Easy Apply jobs, and works slowly on purpose. A real application "
                 "has been confirmed once on the live site (LinkedIn showed \"Application submitted\"), but that is one "
                 "job, not a track record. Rehearse first, then apply for real with 1, and keep numbers small.",
+    "wellfound": "Wellfound support has not been checked on the live site: its page layout may differ from what the program expects. \
+Rehearse first, and when you apply for real, start with 1 application.",
     "indeed": "Indeed forbids automation and often stops it with a human check, so expect to be asked to help and for "
               "jobs to be skipped. This only fills in Indeed's own application form: a job that sends you to the "
               "company's website is skipped. Reading jobs has worked on the live site, but Indeed's own application "
@@ -64,6 +74,25 @@ def _site_choice() -> str:
     </fieldset>"""
 
 
+DETAILS_TEXT = "Add your resume, what you are looking for, and (if you like) an AI helper."
+
+
+def _details_links(suffix: str) -> str:
+    """The three links of \"Your details\". Shown in step 1 and again on the Profile tab, so the ids carry a suffix."""
+    return ('<a class="btn" href="/profile">Profile and resume</a><a class="btn" href="/ai">AI helper</a>'
+            f'<a class="btn" id="questions-link{suffix}" data-questions-link href="/questions">Questions</a>'
+            '<a class="btn" href="/answers/health">Check my answers</a>')
+
+
+def _details_card() -> str:
+    return f"""
+<section class="card" aria-labelledby="h-details">
+  <h2 id="h-details">Your details</h2>
+  <p>{DETAILS_TEXT}</p>
+  <div class="controls">{_details_links("-profile")}</div>
+</section>"""
+
+
 def _step(number: int, title: str, text: str, controls: str) -> str:
     return f"""
 <article class="card step" data-step="{number}" aria-labelledby="step-{number}">
@@ -78,10 +107,38 @@ def _button(label: str, action: str, style: str = "") -> str:
     return f'<button class="btn {style}" type="button" data-action="{action}">{label}</button>'
 
 
+def _privacy_card() -> str:
+    return f"""
+<section class="card" aria-labelledby="h-privacy">
+      <h2 id="h-privacy" tabindex="-1">Your personal information</h2>
+      <p class="hint">{PRIVACY_RISK}{help_button("privacy", "where your information is kept", PRIVACY_MORE)}</p>
+      <ul class="erase-list" id="erase-list"></ul>
+      <div class="controls">
+        <button class="btn" type="button" id="erase-all">Select all</button>
+        <button class="btn btn-danger" type="button" id="erase-open" disabled>Delete selected&hellip;</button>
+      </div>
+      <p class="notice" id="erase-result" role="status" hidden></p>
+    </section>"""
+
+
+def _tools_card() -> str:
+    return f"""
+<section class="card" aria-labelledby="h-tools">
+      <h2 id="h-tools">Tools</h2>
+      <div class="controls">
+        {_button("Check my setup", "doctor")}
+        {_button("Repair the install", "repair")}
+        <button class="btn" type="button" data-action="install_browser" id="install-browser" hidden>Install Chrome</button>
+        <a class="btn" href="/applications" id="applications-link">Applications (AI agent)</a>
+        <button class="btn" type="button" data-open="data" id="open-data">Show the data folder</button>
+        <button class="btn" type="button" data-open="reports" id="open-reports">Show the reports folder</button>
+      </div>
+    </section>"""
+
+
 def render(token: str) -> str:
     steps = "".join((
-        _step(1, "Your details", "Add your resume, what you are looking for, and (if you like) an AI helper.",
-              '<a class="btn" href="/profile">Profile and resume</a><a class="btn" href="/ai">AI helper</a><a class="btn" id="questions-link" href="/questions">Questions</a>'),
+        _step(1, "Your details", DETAILS_TEXT, _details_links("")),
         _step(2, "Open the browser", f"Opens a separate window that this program controls. Log in to {listed(PORTALS.values(), 'and')} in it, once each.",
               _button("Open the browser", "browser", "btn-primary")),
         _step(3, "Check the site", "A read-only test: are you logged in, and can it see jobs? It applies to nothing.",
@@ -92,7 +149,9 @@ def render(token: str) -> str:
 <label class="check" for="rehearse-ai"><input id="rehearse-ai" type="checkbox"> Use the AI helper</label>
 <label class="check" for="rehearse-recheck"><input id="rehearse-recheck" type="checkbox"> <span id="rehearse-recheck-text">{RECHECK_NONE}</span></label>
 <label class="check" for="rehearse-suggested"><input id="rehearse-suggested" type="checkbox" aria-describedby="rehearse-suggested-hint"> {SUGGESTED_LABEL}</label>
-{_suggested_hint("rehearse")}"""
+{_suggested_hint("rehearse")}
+<label class="check" for="rehearse-agent"><input id="rehearse-agent" type="checkbox" checked aria-describedby="rehearse-agent-hint"> {AGENT_LABEL}</label>
+<p class="hint" id="rehearse-agent-hint">{AGENT_RISK} In a rehearsal it stops before the final button, so nothing is sent.</p>"""
               + _button("Start the rehearsal", "rehearse", "btn-primary")),
         _step(5, "Apply for real", f"Sends real applications on the chosen site. You will be asked how many, and to confirm. Start with 3 (with {listed([PORTALS[key] for key in SITE_NOTES])}, start with 1).",
               '<button class="btn btn-danger" type="button" id="apply-open">Apply for real</button>'),
@@ -106,6 +165,10 @@ def render(token: str) -> str:
 <title>Job Apply: control panel</title>
 <link rel="stylesheet" href="/static/theme.css">
 <script src="/static/panel.js" defer></script>
+<script src="/static/agent.js" defer></script>
+<script src="/static/dashboard.js" defer></script>
+<script src="/static/ask.js" defer></script>
+<script src="/static/tabs.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#console">Skip to the output</a>
@@ -118,11 +181,21 @@ def render(token: str) -> str:
     <span class="chip" id="os-chip">Looking at your computer&hellip;</span>
     <button class="btn btn-small" id="quit" type="button">Quit</button>
   </div>
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" type="button" role="tab" id="tab-apply" aria-controls="panel-apply" aria-selected="true">Apply on a site</button>
+    <button class="tab" type="button" role="tab" id="tab-agent" aria-controls="panel-agent" aria-selected="false" tabindex="-1">AI agent
+      <span class="badge" id="agent-badge" hidden></span></button>
+    <button class="tab" type="button" role="tab" id="tab-profile" aria-controls="panel-profile" aria-selected="false" tabindex="-1">Profile</button>
+  </div>
 </header>
+<p class="banner" id="stale-banner" role="status" hidden><strong>This panel is running an older version of the program than the one on your computer.</strong>
+New features may be missing, and some buttons may do what they used to. Press <strong>Quit</strong> (at the top of this page), then start it again with
+<code>jobapply panel</code>.</p>
 <noscript><p class="banner">The buttons on this page need JavaScript. You can still use
 <a href="/profile">Profile and resume</a> and the <a href="/ai">AI helper</a>.</p></noscript>
 <main class="layout">
   <div class="left">
+   <div class="tabpanel" role="tabpanel" id="panel-apply" aria-labelledby="tab-apply">
     <section class="card" aria-labelledby="h-status">
       <h2 id="h-status">Where things stand</h2>
       <ul class="pills" id="pills"></ul>
@@ -131,43 +204,28 @@ def render(token: str) -> str:
     <h2 class="sr-only">Steps</h2>
     {_site_choice()}
     <div class="grid">{steps}</div>
-    <section class="card" aria-labelledby="h-tools">
-      <h2 id="h-tools">Tools</h2>
-      <div class="controls">
-        {_button("Check my setup", "doctor")}
-        {_button("Repair the install", "repair")}
-        <button class="btn" type="button" data-action="install_browser" id="install-browser" hidden>Install Chrome</button>
-        <button class="btn" type="button" data-open="data" id="open-data">Show the data folder</button>
-        <button class="btn" type="button" data-open="reports" id="open-reports">Show the reports folder</button>
-      </div>
-    </section>
     <section class="card" aria-labelledby="h-reports">
       <h2 id="h-reports" tabindex="-1">Reports</h2>
       <p class="hint" id="reports-empty">Reports appear here after a run.</p>
       <ul class="reports" id="reports"></ul>
       <article class="well report" id="report-view" tabindex="0" aria-label="Report preview" hidden></article>
     </section>
-    <section class="card" aria-labelledby="h-privacy">
-      <h2 id="h-privacy" tabindex="-1">Your personal information</h2>
-      <p class="hint">{PRIVACY_RISK}{help_button("privacy", "where your information is kept", PRIVACY_MORE)}</p>
-      <ul class="erase-list" id="erase-list"></ul>
-      <div class="controls">
-        <button class="btn" type="button" id="erase-all">Select all</button>
-        <button class="btn btn-danger" type="button" id="erase-open" disabled>Delete selected&hellip;</button>
-      </div>
-      <p class="notice" id="erase-result" role="status" hidden></p>
-    </section>
+   </div>
+   <div class="tabpanel" role="tabpanel" id="panel-agent" aria-labelledby="tab-agent" hidden>{agent_card.render(AI_DISCLOSURE)}
+   </div>
+   <div class="tabpanel" role="tabpanel" id="panel-profile" aria-labelledby="tab-profile" hidden>{profile_tab.render(_details_card(), _tools_card(), _privacy_card())}
+   </div>
   </div>
-  <aside class="right">
+  <aside class="right" data-only-on="tab-apply tab-agent">
     <section class="card console-card" id="console" aria-labelledby="h-out">
       <div class="console-head">
-        <h2 id="h-out">Output</h2>
+        <h2 id="h-out" tabindex="-1">Output</h2>
         <span class="status" id="run-status" data-state="idle">Nothing is running</span>
         <button class="btn btn-small btn-danger" id="stop" type="button" disabled>Stop</button>
       </div>
       <p class="notice" id="notice" hidden></p>
       <pre class="well log" id="log" role="log" aria-live="off" tabindex="0"></pre>
-    </section>
+    </section>{ask_card.render()}
   </aside>
 </main>
 
@@ -192,6 +250,11 @@ def render(token: str) -> str:
     <label class="check" for="apply-suggested"><input id="apply-suggested" type="checkbox" aria-describedby="apply-suggested-hint">
       {SUGGESTED_LABEL}</label>
     {_suggested_hint("apply")}
+    <label class="check" for="apply-agent"><input id="apply-agent" type="checkbox" checked aria-describedby="apply-agent-hint"> {AGENT_LABEL}</label>
+    <p class="hint" id="apply-agent-hint">{AGENT_RISK}</p>
+    <label class="check" for="apply-approval"><input id="apply-approval" type="checkbox" checked aria-describedby="apply-approval-hint">
+      {APPROVAL_LABEL}</label>
+    <p class="hint" id="apply-approval-hint">{APPROVAL_HINT}</p>
     <div class="field"><label for="apply-confirm">Type YES to confirm</label>
     <input id="apply-confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
     <p class="error" id="apply-error" role="alert" hidden></p>

@@ -102,7 +102,7 @@ def _is_required(field, label: str, default: bool = False) -> bool:
     )
 
 
-def _field_text(kind: str, answer: str):
+def field_text(kind: str, answer: str):
     """What to type for this answer in this kind of box, or None when it cannot be typed there at all."""
     if kind == "number":  # "5 years" and "4.0" are answers, but a number box takes only the digits
         found = NUMBER.search(answer)
@@ -128,7 +128,7 @@ def _fill_text_fields(box, resolver: AnswerResolver, default_required: bool = Fa
                 continue
             answer = resolver.resolve(label, required=_is_required(field, label, default_required),
                                       read=lambda field=field: field.input_value(timeout=READ_MS))
-            text = None if answer is None else _field_text(kind, answer)
+            text = None if answer is None else field_text(kind, answer)
             if text is not None:
                 field.fill(text)
         except Exception:

@@ -28,3 +28,4 @@ include = ["jobapply*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["browser: drives a real Chrome (most of the suite's time); leave these out with -m \"not browser\""]

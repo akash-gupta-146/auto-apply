@@ -37,6 +37,7 @@ class Job(JobCard):
     description: str = ""
     salary: str = ""
     already_applied: bool = False
+    closed: bool = False  # the page itself says the listing no longer takes applications (set only where its words are there to read)
 
     @classmethod
     def from_card(cls, card: JobCard, **extra) -> "Job":
@@ -48,6 +49,8 @@ class Result:
     status: Status
     reason: str = ""
     score: Optional[float] = None
+    elsewhere: bool = False  # SKIPPED_EXTERNAL only: the portal has no apply of its own here, but the job may be open on the company's site
+    blameless: bool = False  # FAILED only, for a reason that says nothing about the site (the tab was closed): not a sign its selectors broke
 
 
 class ChallengeDetected(Exception):
@@ -60,6 +63,10 @@ class NotLoggedIn(Exception):
 
 class SetupIncomplete(Exception):
     """The portal will not show its jobs until the person finishes something only they can do (a profile wizard)."""
+
+
+class BrowserGone(Exception):
+    """The automation browser itself was closed, so there is no tab to open and nothing more can be done until the person opens it again."""
 
 
 class FormBlocked(Exception):

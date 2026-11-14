@@ -15,8 +15,10 @@ from typing import Iterable, Iterator, List, Optional, Pattern, Sequence, Tuple
 
 from ..config import Criteria, Profile
 from ..models import ChallengeDetected, Job, JobCard, NotLoggedIn, Result
+from . import evidence
 from .prompts import Judge, dismiss_prompts
 
+MAX_WIDGETS_LOOKED_AT = 6  # a page can hold several copies of a widget; the first few settle it
 CHALLENGE_URL_HINTS = ("captcha", "cdn-cgi/challenge", "/checkpoint/", "authwall")
 RENDERED_MIN_CHARS = 300  # visible text needed before a page counts as rendered
 MIN_AUTH_DWELL_S = 5.0  # Naukri redirects logged-out users to /nlogin at ~3s (measured live)
@@ -42,6 +44,13 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
+def _shows_challenge(found) -> bool:
+    """Is one of these captcha widgets really in front of the person? Not the small \"protected by reCAPTCHA\" badge that invisible
+    reCAPTCHA parks on every form it guards: that one is on the page whether or not anything is being checked."""
+    return any(found.nth(i).is_visible() and not found.nth(i).evaluate("e => !!e.closest('.grecaptcha-badge')")
+               for i in range(min(found.count(), MAX_WIDGETS_LOOKED_AT)))
+
+
 def looks_like_challenge(page) -> bool:
     """Visible captcha / bot-wall on this page? Conservative: text is checked at the top only."""
     url = page.url.lower()
@@ -49,7 +58,7 @@ def looks_like_challenge(page) -> bool:
         return True
     for selector in CHALLENGE_SELECTORS:
         try:
-            if page.locator(selector).first.is_visible():
+            if _shows_challenge(page.locator(selector)):
                 return True
         except Exception:
             continue
@@ -108,7 +117,7 @@ class Adapter(abc.ABC):
         self.profile = profile
         self.criteria = criteria
         self.failures_dir = failures_dir
-
+        self.network = evidence.NetworkWatch(page)  # what the browser last heard back, for the note a failure leaves
     # -- the contract ---------------------------------------------------------
     @abc.abstractmethod
     def is_logged_in(self) -> bool: ...
@@ -134,6 +143,24 @@ class Adapter(abc.ABC):
         raise NotImplementedError(f"{self.name}: applies with the resume stored in your portal profile")
 
     # -- shared plumbing --------------------------------------------------------
+    def tab_lost(self) -> bool:
+        """Has the tab this run drives been closed (by you, or by a crash)? Only the main tab counts: a form tab a wizard opened for itself and
+        closed again is not a loss."""
+        try:
+            return bool(self.page.is_closed())
+        except Exception:  # a stand-in page that cannot say: take it as open, and let the real error show
+            return False
+
+    def reopen_tab(self) -> bool:
+        """A fresh tab in the same browser, so you are still logged in. False when the browser itself is gone: then there is nothing to open one in."""
+        try:
+            fresh = self.page.context.new_page()
+        except Exception:
+            return False
+        self.page = self.active = fresh
+        self.network = evidence.NetworkWatch(fresh)
+        return True
+
     def is_challenge(self) -> bool:
         return looks_like_challenge(self.active)
 
@@ -191,15 +218,21 @@ class Adapter(abc.ABC):
             return ""
 
     def capture_failure(self, card: JobCard) -> Optional[Path]:
-        """Screenshot + trimmed HTML so a selector can be repaired without re-running."""
+        """What a failed job leaves behind so a selector can be repaired, or a cause read, without re-running: a picture, the page's HTML, the
+        address, and a note of what the page showed and what the network just answered (see evidence.py). Each is kept even if another cannot be."""
         if not self.failures_dir:
             return None
         self.failures_dir.mkdir(parents=True, exist_ok=True)
         stem = self.failures_dir / f"{self.name}-{int(time.time())}"
-        try:
-            self.active.screenshot(path=f"{stem}.png")
-            Path(f"{stem}.html").write_text(self.active.content()[:300_000], encoding="utf-8")
-            Path(f"{stem}.txt").write_text(f"{card.url}\n", encoding="utf-8")
-        except Exception:
-            return None
-        return stem
+        steps = (lambda: self.active.screenshot(path=f"{stem}.png"),
+                 lambda: Path(f"{stem}.html").write_text(self.active.content()[:300_000], encoding="utf-8"),
+                 lambda: Path(f"{stem}.txt").write_text(f"{card.url}\n", encoding="utf-8"),
+                 lambda: evidence.save(Path(f"{stem}.json"), self.active, self.network, card.url, card.title))
+        kept = 0
+        for step in steps:
+            try:
+                step()
+                kept += 1
+            except Exception:
+                evidence.log.debug("part of the failure capture could not be taken", exc_info=True)
+        return stem if kept else None

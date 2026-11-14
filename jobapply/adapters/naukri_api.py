@@ -13,6 +13,8 @@ from typing import List, Optional
 
 from ..models import JobCard
 
+THIN_DESCRIPTION_CHARS = 200  # a posting that names its role and skills takes more than this; less is worth a line in the log
+
 BASE = "https://www.naukri.com"
 
 
@@ -49,29 +51,36 @@ def logged_in_flag(payload) -> Optional[bool]:
 
 
 def job_detail(payloads: List[object], job_url: str) -> Optional[dict]:
-    """The /jobapi/v4/job/<id> object for this job: has the full description, salary, apply type."""
-    job_id = job_url.split("?")[0].rstrip("/").rsplit("-", 1)[-1]
+    """The /jobapi/v4/job/<id> object for this job: has the full description, salary, apply type.
 
-    def find(node) -> Optional[dict]:
+    A page's calls can hold several objects for the same job id that carry a `description` (the job itself, a preview, a card). The one with
+    the most text is the job: taking the first would let a short blurb win whenever it arrived first."""
+    job_id = job_url.split("?")[0].rstrip("/").rsplit("-", 1)[-1]
+    found: List[dict] = []
+
+    def find(node) -> None:
         if isinstance(node, dict):
             if str(node.get("jobId")) == job_id and "description" in node:
-                return node
+                found.append(node)
             for value in node.values():
-                hit = find(value)
-                if hit:
-                    return hit
+                find(value)
         elif isinstance(node, list):
             for value in node:
-                hit = find(value)
-                if hit:
-                    return hit
-        return None
+                find(value)
 
     for payload in payloads:
-        hit = find(payload)
-        if hit:
-            return hit
-    return None
+        find(payload)
+    return max(found, key=lambda node: len(plain_text(node.get("description"))), default=None)  # max keeps the first of equals
+
+
+def thin_description_note(detail: Optional[dict], description: str, job_url: str) -> str:
+    """When a job's description is too short to judge it by: what it was and which fields the job object does carry (their names only, never
+    their values), so a short read can be explained from the log instead of guessed at. Empty when the description is long enough."""
+    if len(description) >= THIN_DESCRIPTION_CHARS:
+        return ""
+    where = job_url.split("?")[0]
+    fields = ", ".join(sorted(detail)) if detail else "none: the page's own text was used"
+    return f"thin description ({len(description)} characters) for {where}; fields in the job object: {fields}"
 
 
 def apply_questions(payload) -> List[str]:
@@ -92,7 +101,7 @@ def apply_questions(payload) -> List[str]:
 
 def plain_text(markup: str) -> str:
     """Job descriptions arrive as HTML: keep the line structure, drop the tags."""
-    text = re.sub(r"<\s*(br|/p|/li|/div|/h\d)[^>]*>", "\n", markup or "", flags=re.I)
+    text = re.sub(r"<\s*(br|/p|/li|/div|/h\d)[^>]*>", "\n", markup if isinstance(markup, str) else "", flags=re.I)  # (not text: nothing to read)
     text = re.sub(r"<[^>]+>", " ", text)
     lines = (re.sub(r"[ \t\u00a0]+", " ", line).strip() for line in html.unescape(text).splitlines())
     return "\n".join(line for line in lines if line)

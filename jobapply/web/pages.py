@@ -15,7 +15,7 @@ from .ai_form import AI_FIELDS, MAX_BACKUPS, backup_fields
 from .help import help_button, topic_list
 from .forms import (ADD_SKILL, CRITERIA_FIELDS, MAX_SKILL_NAME, MAX_SKILL_YEARS, PROFILE_FIELDS, SKILL_NAME, SKILL_YEARS,
                     Field)
-from .questions import MAX_ANSWER_CHARS, field_name
+from .questions import MAX_ANSWER_CHARS, MAX_QUESTION_CHARS, field_name
 
 AUTOCOMPLETE = {"name": "name", "email": "email", "phone": "tel"}
 INPUT_TYPE = {"text": "text", "list": "text", "email": "email", "tel": "tel", "number": "number", "integer": "number", "percent": "number",
@@ -359,7 +359,8 @@ work. None of your documents are sent.</p>
 def _question(item: Mapping[str, object], index: int) -> str:
     """One waiting question: a radio button per choice when the form gave choices, else a text box."""
     name = escape(field_name(str(item["norm"])), quote=True)
-    where = f' <small>({escape(str(item["portal"]))})</small>' if item["portal"] else ""
+    asked_by = item.get("context") or item["portal"]  # the job that asked, when the agent knows it; else the site
+    where = f' <small>({escape(str(asked_by))})</small>' if asked_by else ""
     options = item["options"]
     if options:
         controls = "".join(
@@ -384,6 +385,38 @@ def _saved_row(token: str, index: int, question: str, answer: str) -> str:
         f'<button type="submit" class="small" aria-label="Remove my saved answer to: {asked}">Remove</button></form></li>')
 
 
+def _guess_row(token: str, guess) -> str:
+    """One guess: the question, the guess in italics (it is not yours until you keep it), who it was for, and Keep or Forget."""
+    asked = escape(guess.question, quote=True)
+    hidden = f'<input type="hidden" name="question" value="{asked}">'
+    origin = " &middot; ".join(escape(part) for part in (f"for {guess.job}" if guess.job else "", guess.when.replace("T", " ")) if part)
+    return (
+        f'<li><div class="what"><span class="q">{escape(guess.question)}</span><br><em>{escape(guess.answer)}</em>'
+        f'{f" <small>({origin})</small>" if origin else ""}</div>'
+        f'<form method="post" action="/questions/guess/keep">{_token(token)}{hidden}'
+        f'<button type="submit" class="small" aria-label="Keep the guess as my answer to: {asked}">Keep as my answer</button></form>'
+        f'<form method="post" action="/questions/guess/forget">{_token(token)}{hidden}'
+        f'<button type="submit" class="small" aria-label="Forget the guess for: {asked}">Forget</button></form></li>')
+
+
+def _guessed_answers(token: str, guesses: Sequence) -> str:
+    """What the AI agent guessed, for you to check. A guess is never used as a fact: only by the agent, flagged as a guess, and only when
+    nothing you said or the profile's rules can answer. Keeping one makes it your own answer; forgetting it means you are asked next time."""
+    if not guesses:
+        return ""
+    rows = "".join(_guess_row(token, guess) for guess in guesses)
+    return f"""
+<section>
+<details class="saved-list guessed-list" open>
+<summary>Answers the AI guessed ({len(guesses)})</summary>
+<p class="saved-note">These are guesses, not answers you gave. The AI agent made each one when nothing you saved fitted, said so when it did,
+and lists it when it asks to send. It uses a guess again for the same question, only as a guess, and the AI helper never reads one as a fact
+about you. If a guess is right, keep it as your own answer. If it is wrong, forget it: the next job that asks will wait for you instead.</p>
+<ul class="saved">{rows}</ul>
+</details>
+</section>"""
+
+
 def _saved_answers(token: str, saved: Sequence[Tuple[str, str]], opened: bool = False) -> str:
     """What you have answered so far, in a dropdown (it gets long): each can be changed or taken back, because the AI learns from them.
     It stays open after you edit or remove one, so you can carry on down the list."""
@@ -403,9 +436,42 @@ edit or remove it.</p>
 </section>"""
 
 
+HOW_TO_ANSWER = """<strong>Write it the way the form would show it:</strong><br>
+<b>A text box or a number:</b> the answer itself, like <code>30 days</code> or <code>12</code>.<br>
+<b>A yes/no question, or a single tick box:</b> <code>Yes</code> (the box gets ticked) or <code>No</code> (it is left alone; if the form
+cannot go on without the tick, that job is skipped).<br>
+<b>Radio buttons, tick boxes to pick one, or a drop-down:</b> one of the choices as it is written, or <code>Yes</code> or <code>No</code>,
+or a few words of the choice, or a number (the choice whose range holds it: <code>5</code> picks &ldquo;3-6 years&rdquo;).<br>
+<b>Agreements and consents</b> (&ldquo;I agree&rdquo;, &ldquo;I certify&rdquo;, privacy, terms): the AI is never shown these. They are
+answered only when a form asks them in these same words."""
+
+
+def _add_form(token: str, draft: Tuple[str, str] = ("", "")) -> str:
+    """Add a question and answer by hand. It joins the saved answers below: same bank, same use by jobs and by the AI helper."""
+    question, answer = draft
+    return f"""
+<section>
+<h2>Add a question and answer yourself</h2>
+<p>Know something applications ask? Add it here before it comes up. A job that asks it is filled in from your answer, and with
+the AI helper on it reads your answer too, so it can answer the same question put in other words, for radio buttons, tick boxes,
+drop-downs and text boxes alike. Answer only what is true for you. (Naukri's own screening-question window is filled from these too, but that part has not been checked on the live site yet.)</p>
+<form method="post" action="/questions/add">{_token(token)}
+<div class="field"><label for="add-question">The question, as the application form words it</label>
+<input id="add-question" name="question" type="text" maxlength="{MAX_QUESTION_CHARS}" required value="{escape(question, quote=True)}">
+<p class="hint">Copy it from the form if you can: the same words are answered with no AI at all.</p></div>
+<div class="field"><label for="add-answer">Your answer</label>
+<textarea id="add-answer" name="answer" rows="3" maxlength="{MAX_ANSWER_CHARS}" required>{escape(answer)}</textarea>
+<p class="hint">How to write it for a text box, radio buttons, tick boxes or a drop-down {help_button("how-to-answer", "how to write your answer", HOW_TO_ANSWER)}</p></div>
+<button type="submit">Add this answer</button>
+</form>
+</section>"""
+
+
 def questions_page(token: str, items: Sequence[Mapping[str, object]], banner: Tuple[str, str] = ("", ""),
-                   saved: Sequence[Tuple[str, str]] = (), saved_open: bool = False) -> str:
-    """What runs could not answer for you. Answer once: the answer is used for every job that asks the same thing."""
+                   saved: Sequence[Tuple[str, str]] = (), saved_open: bool = False, draft: Tuple[str, str] = ("", ""),
+                   guesses: Sequence = ()) -> str:
+    """What runs could not answer for you. Answer once: the answer is used for every job that asks the same thing.
+    Below it, a form to add a question and answer yourself; `draft` keeps what was typed when it could not be saved."""
     if items:
         body = (f'<form method="post" action="/questions/save">{_token(token)}'
                 + "".join(_question(item, index) for index, item in enumerate(items))
@@ -415,12 +481,13 @@ def questions_page(token: str, items: Sequence[Mapping[str, object]], banner: Tu
     return _page("Questions waiting for you", f"""
 <h1>Questions waiting for you</h1>
 {_banner(banner)}
+<p><a href="/answers/health">Check my saved answers</a>: where they disagree with your profile, repeat each other, or are never used.</p>
 <section>
 <p>While a run is going, a job that asks one of these waits up to 5 minutes for your answer here, then it is skipped and
 the run moves on. Answer only what is true for you: your answer is saved on this computer and used for every later job
 that asks the same thing. Leave a question blank to skip it.</p>
 {body}
-</section>{_saved_answers(token, saved, saved_open)}""")
+</section>{_guessed_answers(token, guesses)}{_add_form(token, draft)}{_saved_answers(token, saved, saved_open)}""")
 
 
 def done_page(name: str, resume_name: str, profile_file: str, criteria_file: str) -> str:

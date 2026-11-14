@@ -27,9 +27,13 @@ PRESS_MS = 2_000
 MAX_TEXT = 600
 
 # The "no" side, best first. Matched against the whole label, so "Update profile" can never be a "Not now".
+FORM_FIELDS = 2  # a pop-up asking for this many things (name, email...) is a form, not a nuisance; one email box is a sign-up nag
 NO_WORDS = (
     re.compile(r"(?:not now|no,? thanks?|no thank you|maybe later|remind me later|ask me later|not interested|skip(?: for now)?|later)\W*", re.I),
     re.compile(r"(?:dismiss|decline|reject(?: all)?|cancel|no|close|got it|ok|okay)\W*", re.I),
+    # a cookie banner's "no": "Reject non-essential", "Decline optional cookies", "Necessary only", "Use essential cookies only"
+    re.compile(r"(?:(?:reject|decline|deny|refuse|disable)(?: all| non[- ]?essential| optional| unnecessary| additional)?(?: cookies)?"
+               r"|(?:only |use )?(?:necessary|essential|required)(?: cookies)?(?: only)?)\W*", re.I),
 )
 # Never pressed, from any source. A label that says yes (or moves an application on) is refused even if the AI picked it.
 YES_WORDS = re.compile(
@@ -43,6 +47,7 @@ LONG_NUMBER = re.compile(r"\+?\d[\d\s().-]{6,}\d")
 SCAN_JS = """() => {
   const SELECTOR = 'dialog, [role=dialog], [role=alertdialog], [aria-modal=true], [class*=popup i], [class*=modal i]';
   const CONTROLS = 'button, [role=button], a[role=button], input[type=button], input[type=submit]';
+  const FIELDS = 'input:not([type=hidden]):not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]), textarea, select, [role=textbox], [role=combobox]';
   const shown = e => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[aria-hidden=true]');
   const fixed = e => { for (let n = e; n && n !== document.body; n = n.parentElement) if (getComputedStyle(n).position === 'fixed') return true; return false; };
   document.querySelectorAll('[data-jobapply-prompt], [data-jobapply-control]').forEach(e => {
@@ -57,7 +62,8 @@ SCAN_JS = """() => {
       const label = (c.innerText || c.value || '').trim().replace(/\\s+/g, ' ');
       return {index: j, name: label || c.getAttribute('aria-label') || c.getAttribute('title') || '', icon: !label || /^[×xX]$/.test(label)};
     });
-    return {index: i, text: (root.innerText || '').replace(/\\s+/g, ' ').trim(), controls};
+    return {index: i, text: (root.innerText || '').replace(/\\s+/g, ' ').trim(), controls,
+      fields: [...root.querySelectorAll(FIELDS)].filter(shown).length};
   });
 }"""
 
@@ -74,6 +80,7 @@ class Prompt:
     index: int
     text: str  # its own wording, with emails and long numbers removed
     controls: List[Control]
+    fields: int = 0  # things to fill in, inside it: a pop-up that asks for several is a form (an application), not a nuisance
 
     @property
     def labels(self) -> List[str]:
@@ -100,7 +107,8 @@ def scan(page) -> List[Prompt]:
         raw = page.evaluate(SCAN_JS)
     except Exception:
         return []  # the page is mid-navigation: there is nothing to look at
-    return [Prompt(item["index"], mask(item["text"]), [Control(**control) for control in item["controls"]]) for item in raw if item["controls"]]
+    return [Prompt(item["index"], mask(item["text"]), [Control(**control) for control in item["controls"]], item.get("fields", 0))
+            for item in raw if item["controls"]]
 
 
 def no_side(prompt: Prompt) -> Optional[Control]:
@@ -139,8 +147,8 @@ def dismiss_prompts(page, judge: Optional[Judge] = None, protected: Optional[Pat
     for _ in range(rounds):
         pressed = False
         for prompt in scan(page):
-            if prompt.text in left_alone or (protected is not None and protected.search(prompt.text)):
-                continue
+            if prompt.text in left_alone or prompt.fields >= FORM_FIELDS or (protected is not None and protected.search(prompt.text)):
+                continue  # a form is never closed as if it were an advert: a modal that asks for your name, email and phone IS the application
             control, how = no_side(prompt), "rule"
             if control is None:
                 control, how = _chosen_by_ai(prompt, judge), "AI"

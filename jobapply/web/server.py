@@ -11,24 +11,53 @@ import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Optional
-from urllib.parse import parse_qs, urlparse
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from ..config import Paths
 from . import panel_page
 from .actions import ActionError
 from .app import UiApp
 from .forms import ADD_SKILL, AI_FILL, MAX_UPLOAD_BYTES, parse_multipart
+from .health_page import ACTIONS, banner_for
 from .markdown import parse_markdown
 from .panel import Panel
+from .questions import NotSaved
 from .runner import Busy
 
 DEFAULT_PORT = 8765
+
+
+def questions_banner(query: Dict[str, List[str]]) -> Tuple[str, str]:
+    """The message on top of the Questions page after something was saved, added, edited or removed (it arrives in the address)."""
+    saved = query.get("saved", [""])[0]
+    if saved.isdigit() and int(saved):
+        return ("ok", f"Saved {saved} answer{'' if saved == '1' else 's'}.")
+    if "forgot" in query:
+        return ("ok", "Removed that saved answer.")
+    if "kept" in query:
+        return ("ok", "Kept as your own answer. Jobs that ask it will use it as something you said.")
+    if "guess_forgot" in query:
+        return ("ok", "Forgot that guess. The next job that asks it will wait for your answer.")
+    if "edited" in query:
+        return ("ok", "Saved your change.")
+    if "added" in query:
+        lines = (["That question was already saved, so its answer is now updated."] if query["added"][0] == "updated" else
+                 ["Added. A job that asks it is filled in from your answer, and with the AI helper on, it reads your answer too."])
+        also = query.get("also", [""])[0]
+        if also.isdigit() and int(also):
+            lines.append(f"It also answers {also} other way{'' if also == '1' else 's'} of asking the same thing.")
+        if "consent" in query:
+            lines.append("This is an agreement or consent question, so the AI never sees it: it is used only when a form asks it in these same words.")
+        return ("ok", "\n".join(lines))
+    return ("", "")
 ENVELOPE_BYTES = 64 * 1024  # room for form fields around an upload
 MAX_JSON_BYTES = 8 * 1024
+BODY_LIMITS = {"/api/ask": 64 * 1024}  # a question and the talk so far, in any script, is longer than a button press
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
-STATIC_TYPES = {"theme.css": "text/css; charset=utf-8", "panel.js": "text/javascript; charset=utf-8"}
+JS = "text/javascript; charset=utf-8"
+STATIC_TYPES = {"theme.css": "text/css; charset=utf-8", "panel.js": JS, "agent.js": JS, "dashboard.js": JS, "ask.js": JS, "tabs.js": JS}
 TOKEN_HEADER = "X-Token"
 SECURITY_HEADERS = {
     "Cache-Control": "no-store",
@@ -119,19 +148,18 @@ def make_handler(app: UiApp, panel: Panel):
                 if "added" in query:
                     banner = ("ok", "Added. Now choose it as your main AI, or as a backup, and press Save.")
                 return self._html(app.ai_html(banner=banner))
+            if route == "/applications":
+                return self._html(app.applications_html())
             if route == "/questions":
                 query = parse_qs(parsed.query)
-                saved = query.get("saved", [""])[0]
-                banner = ("ok", f"Saved {saved} answer{'' if saved == '1' else 's'}.") if saved.isdigit() and int(saved) else ("", "")
-                if "forgot" in query:
-                    banner = ("ok", "Removed that saved answer.")
-                if "edited" in query:
-                    banner = ("ok", "Saved your change.")
-                return self._html(app.questions_html(banner, saved_open="forgot" in query or "edited" in query))
+                opened = any(flag in query for flag in ("forgot", "edited", "added", "kept"))  # you were working with the list: show it
+                return self._html(app.questions_html(questions_banner(query), saved_open=opened))
+            if route == "/answers/health":
+                return self._html(app.health_html(banner_for(parse_qs(parsed.query))))
             self._text(404, "Not found")
 
         def _static(self, name: str) -> None:
-            content_type = STATIC_TYPES.get(name)  # only these two names: nothing typed is ever joined to a path
+            content_type = STATIC_TYPES.get(name)  # only these names: nothing typed is ever joined to a path
             if content_type is None:
                 return self._text(404, "Not found")
             self._finish(200, (STATIC_DIR / name).read_bytes(), content_type)
@@ -160,13 +188,53 @@ def make_handler(app: UiApp, panel: Panel):
                 return self._post_ai_provider(body)
             if route == "/ai/provider/remove":
                 return self._post_ai_provider_remove(body)
+            if route in ("/agent/approve", "/agent/reject", "/agent/pause"):
+                return self._post_agent(route, body)
             if route == "/questions/save":
                 return self._post_questions(body)
             if route == "/questions/forget":
                 return self._post_forget(body)
             if route == "/questions/edit":
                 return self._post_edit(body)
+            if route == "/questions/add":
+                return self._post_add_question(body)
+            if route in ("/questions/guess/keep", "/questions/guess/forget"):
+                return self._post_guess(route, body)
+            if route.startswith("/answers/health/") and route.rsplit("/", 1)[1] in ACTIONS:
+                return self._post_health(route.rsplit("/", 1)[1], body)
             self._text(404, "Not found")
+
+        def _post_health(self, action: str, body: bytes) -> None:
+            raw = self._urlencoded(body)
+            if not app.token_ok(raw.get("token")):
+                return self._text(403, "Forbidden")
+            self._redirect(f"/answers/health?done={action}" if app.fix_answer(action, raw.get("question", "")) else "/answers/health?failed=1")
+
+        def _post_add_question(self, body: bytes) -> None:
+            raw = self._urlencoded(body)
+            if not app.token_ok(raw.get("token")):
+                return self._text(403, "Forbidden")
+            question, answer = raw.get("question", ""), raw.get("answer", "")
+            try:
+                added = app.add_answer(question, answer)
+            except NotSaved as problem:  # nothing was saved: say why, and keep what was typed so it is not lost
+                return self._html(app.questions_html(("error", str(problem)), draft=(question, answer)), 400)
+            result = {"added": "updated" if added.updated else "new"}
+            if added.folded:
+                result["also"] = str(len(added.folded))
+            if added.consent:
+                result["consent"] = "1"
+            self._redirect(f"/questions?{urlencode(result)}")
+
+        def _post_agent(self, route: str, body: bytes) -> None:
+            raw = self._urlencoded(body)
+            if not app.token_ok(raw.get("token")):
+                return self._text(403, "Forbidden")
+            if route == "/agent/pause":
+                app.agent_pause(raw.get("paused") == "1")
+            else:
+                app.agent_decide(raw.get("session", ""), route.rsplit("/", 1)[1])
+            self._redirect("/applications")
 
         def _post_questions(self, body: bytes) -> None:
             raw = self._urlencoded(body)
@@ -179,6 +247,15 @@ def make_handler(app: UiApp, panel: Panel):
             if not app.token_ok(raw.get("token")):
                 return self._text(403, "Forbidden")
             self._redirect("/questions?forgot=1" if app.forget_answer(raw.get("question", "")) else "/questions")
+
+        def _post_guess(self, route: str, body: bytes) -> None:
+            raw = self._urlencoded(body)
+            if not app.token_ok(raw.get("token")):
+                return self._text(403, "Forbidden")
+            question = raw.get("question", "")
+            keep = route.endswith("/keep")
+            done = app.keep_guess(question) if keep else app.forget_guess(question)
+            self._redirect(f"/questions?{'kept' if keep else 'guess_forgot'}=1" if done else "/questions")
 
         def _post_edit(self, body: bytes) -> None:
             raw = self._urlencoded(body)
@@ -254,7 +331,7 @@ def make_handler(app: UiApp, panel: Panel):
                 return self._json(403, {"error": "Forbidden"})
             if not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json(415, {"error": "Send JSON."})
-            raw = self._read_body(MAX_JSON_BYTES)
+            raw = self._read_body(BODY_LIMITS.get(route, MAX_JSON_BYTES))
             try:
                 body = json.loads(raw) if raw else {}
             except ValueError:
@@ -271,12 +348,20 @@ def make_handler(app: UiApp, panel: Panel):
                     return self._json(200, panel.state(_whole(query.get("since", ["0"])[0])))
                 if (method, route) == ("GET", "/api/report"):
                     return self._json(200, {"blocks": parse_markdown(panel.report(query.get("name", [""])[0]))})
+                if (method, route) == ("GET", "/api/jobs"):
+                    return self._json(200, panel.jobs(query.get("group", [""])[0], query.get("site", [""])[0]))
                 if (method, route) == ("POST", "/api/report/delete"):
                     return self._json(200, panel.delete_report(body.get("name")))
                 if (method, route) == ("POST", "/api/erase"):
                     return self._json(200, panel.erase(body))
                 if (method, route) == ("POST", "/api/run"):
                     return self._json(202, panel.run(body))
+                if (method, route) == ("POST", "/api/ask"):
+                    return self._json(200, panel.ask(body))
+                if (method, route) == ("POST", "/api/agent/decide"):
+                    return self._json(200, panel.agent_decide(body))
+                if (method, route) == ("POST", "/api/agent/pause"):
+                    return self._json(200, panel.agent_pause(body))
                 if (method, route) == ("POST", "/api/stop"):
                     return self._json(200, {"stopped": panel.stop()})
                 if (method, route) == ("POST", "/api/open"):

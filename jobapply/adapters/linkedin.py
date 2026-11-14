@@ -47,8 +47,10 @@ APPLIED_WINDOW = 3_000  # a job's applied status is near the top of its page; la
 SENT = re.compile(r"application (was )?sent", re.I)
 SUBMITTED = re.compile(r"application submitted", re.I)  # the status block of a job you applied to
 CONFIRMED = "LinkedIn confirmed it sent (\"Application sent\", or \"Application submitted\" on the job page)"
+CONFIRMED_ON_RELOAD = "LinkedIn showed no \"Application sent\" window, but the job page, loaded afresh, shows it as applied"
 # What LinkedIn writes on a job you already applied to (seen live: "Application status" with "Application submitted").
 ALREADY_APPLIED = re.compile(r"application (status|submitted)|you applied|applied (on|\d)", re.I)
+CLOSED = re.compile(r"no longer accepting applications", re.I)  # LinkedIn's own banner on a closed job; read from the top of the page like the applied status
 
 CARD = '[componentkey^="job-card-component-ref-"]'
 SEL = {
@@ -198,7 +200,8 @@ class LinkedInAdapter(Adapter):
         main = first_visible(self.active, ["main"])
         text = main.inner_text() if main is not None else self.body_text()
         applied = bool(ALREADY_APPLIED.search(text[:APPLIED_WINDOW]))
-        return Job.from_card(card, description=self._description(text)[:8000], salary=find_salary(text), already_applied=applied)
+        closed = not applied and bool(CLOSED.search(text[:APPLIED_WINDOW]))
+        return Job.from_card(card, description=self._description(text)[:8000], salary=find_salary(text), already_applied=applied, closed=closed)
 
     @staticmethod
     def _description(text: str) -> str:
@@ -212,7 +215,7 @@ class LinkedInAdapter(Adapter):
         if button is None:
             if ALREADY_APPLIED.search(self.body_text(APPLIED_WINDOW)):
                 return Result(Status.SKIPPED_DUPLICATE, "LinkedIn shows this job as already applied")
-            return Result(Status.SKIPPED_EXTERNAL, "no Easy Apply button (company site, closed, or already applied)")
+            return Result(Status.SKIPPED_EXTERNAL, "no Easy Apply button (company site, closed, or already applied)", elsewhere=True)
         button.click()
         self.settle(1.5, 2.5)
         try:
@@ -315,7 +318,23 @@ class LinkedInAdapter(Adapter):
         self._close_window()  # the status may only be drawn once the window is gone
         if self._sent_shown(tries=5):
             return Result(Status.APPLIED, CONFIRMED)
-        raise RuntimeError("submitted, but LinkedIn did not show 'Application sent'")
+        if self._applied_after_reload():
+            return Result(Status.APPLIED, CONFIRMED_ON_RELOAD)
+        raise RuntimeError("submitted, but LinkedIn did not show 'Application sent', nor the job as applied when its page was loaded afresh")
+
+    def _applied_after_reload(self) -> bool:
+        """The last look before calling a press unconfirmed: the window and the status may simply never have been drawn, and the job page, loaded
+        afresh, says whether LinkedIn has the application. The same words `read_job` looks for to skip a job already applied to: and as that found
+        none before this press, any there now are this press's doing."""
+        try:
+            self.active.reload(wait_until="domcontentloaded")
+        except Exception:
+            return False  # a page that will not load again proves nothing: that is still unconfirmed
+        for _ in range(5):
+            self.settle(0.8, 1.2)
+            if ALREADY_APPLIED.search(self.body_text(APPLIED_WINDOW)):
+                return True
+        return False
 
     def _sent_shown(self, tries: int = 10) -> bool:
         for _ in range(tries):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Dict, Iterable, List, NamedTuple, Optional, Set
+from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Set
 
 from .config import Criteria, Profile
 from .experience import years_asked
@@ -263,6 +263,15 @@ def evaluate(job: Job, profile: Profile, criteria: Criteria) -> Decision:
     if RANKS[fit.rating] < RANKS.get(str(criteria.min_fit).title(), RANKS["Low"]):
         return Decision(False, f"fit {fit.rating} is below your minimum of {criteria.min_fit}", score)
     return Decision(True, verdict, score)
+
+
+def judge(job: Job, profile: Profile, criteria: Criteria, fit_judge: Optional[Callable[[Job, Decision], Decision]] = None) -> Decision:
+    """Whether a job is worth applying to: the rules, and (when the title alone said no) the AI's reading of the description if one is given.
+    One place for a run and a triage, so a job a triage passes is one a run would pass."""
+    decision = evaluate(job, profile, criteria)
+    if not decision.ok and decision.rescuable and fit_judge is not None:
+        decision = fit_judge(job, decision)
+    return decision
 
 
 def why_it_fits(job: Job, profile: Profile, criteria: Criteria, decision: Decision) -> str:

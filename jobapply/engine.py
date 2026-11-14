@@ -21,8 +21,9 @@ from .adapters.base import Adapter
 from .answers import AnswerResolver, Attention, normalize
 from .config import Criteria, Profile
 from .db import Database
-from .matching import MATCH, SUGGESTED, Decision, accept_suggested, evaluate, fit_note, why_it_fits
+from .matching import MATCH, SUGGESTED, Decision, accept_suggested, fit_note, judge, why_it_fits
 from .models import (
+    BrowserGone,
     ChallengeDetected,
     Job,
     Declined,
@@ -42,9 +43,11 @@ DISCOVERY_FACTOR = 3  # discover up to this many x the run cap, then stop search
 SUGGESTED_BATCH = 10  # a suggested run reads this many new picks, applies to them, then reads more
 MAX_ANSWER_ROUNDS = 5  # a form asks its questions page by page: answering one page can reveal the next. Bounded, so a form that
 #                        never ends cannot hold the run
+MAX_REOPENS = 2  # fresh tabs opened for ONE job (you closed it again, or it keeps crashing) before it is given up as failed
 # Results that mean the adapter found nothing to press (a company-site job, a job already applied to): no application
 # was tried, so none of the run's attempts was used.
 NOTHING_TRIED = (Status.SKIPPED_EXTERNAL, Status.SKIPPED_DUPLICATE)
+CLOSED_REASON = "closed: the listing is no longer accepting applications"
 
 
 @dataclass
@@ -71,6 +74,23 @@ class RunSummary:
     def done(self) -> int:
         return self.counts[Status.APPLIED.value] + self.counts[Status.DRY_RUN_OK.value]
 
+    @property
+    def waiting(self) -> str:
+        """What is still to do after this run, in a sentence: jobs that searches listed and no run has opened yet (a run that stops after a few
+        applications leaves the rest of what it found), and jobs parked for your answers. Empty when there is nothing. (A LinkedIn queue once held
+        622 unopened jobs and nothing ever said so.)"""
+        unopened, asked = self.queue.get(Status.NEW.value, 0), self.queue.get(Status.NEEDS_ANSWER.value, 0)
+        parts = ([f"{unopened} listed job(s) not opened yet"] if unopened else []) + ([f"{asked} waiting for your answers (Questions tab)"] if asked else [])
+        return f"Still to do on {self.portal}: {', '.join(parts)}." if parts else ""
+
+
+def pace_delay(adapter: Adapter, criteria: Criteria, rng: random.Random) -> float:
+    """How long to wait between two jobs: what the settings say, or what the portal asked for if that is gentler. Shared with the triage."""
+    low, high = criteria.pacing_min_s, criteria.pacing_max_s
+    if adapter.pacing_floor_s:  # the portal asked for gentler pacing than the settings give
+        low, high = max(low, adapter.pacing_floor_s[0]), max(high, adapter.pacing_floor_s[1])
+    return rng.uniform(low, high)
+
 
 class Engine:
     def __init__(
@@ -85,6 +105,7 @@ class Engine:
         dry_run: bool = False,
         reevaluate: bool = False,
         suggested: bool = False,
+        external: Optional[Callable[[Job, float], Result]] = None,
         fit_judge: Optional[Callable[[Job, Decision], Decision]] = None,
         max_attempts: Optional[int] = None,
         answers_loader: Optional[Callable[[], Dict[str, str]]] = None,
@@ -97,9 +118,11 @@ class Engine:
         self.criteria, self.resolver = criteria, resolver
         self.minutes, self.dry_run = minutes, dry_run
         self.reevaluate, self.fit_judge = reevaluate, fit_judge
+        self.external = external  # takes a job the portal cannot apply to itself (and the minutes the run has left): the AI agent
         self.suggested = suggested  # apply to every job the site itself suggests, with no roles/skills/salary matching
         self._shown: Set[str] = set()  # the addresses of every job the site showed this run: all a suggested run may open
         self._attempted: Set[str] = set()  # the jobs this run has already been through, so a later batch never repeats one
+        self._failed_roles: Dict[Tuple[str, str], str] = {}  # (company, title) -> why it failed: its other listings are left alone this run
         self.max_attempts, self._attempts = max_attempts, 0  # hard cap on live Apply clicks, pass or fail
         self.answers_loader = answers_loader  # re-reads your answer bank while a job waits for you to answer in the panel
         self._given_up: Set[str] = set()  # questions nobody answered in time this run: later jobs asking them do not wait again
@@ -108,6 +131,7 @@ class Engine:
         self.summary = RunSummary(adapter.name, dry_run)
         self.deadline = 0.0
         self._fail_streak = 0
+        self._fail_reasons: List[str] = []  # what each failure in the current streak said        self._applying = False  # the job in hand has reached the press that sends it: from then on nothing may be repeated blindly
         self._challenge_streak = 0
         self._discovered = 0  # cards the portal showed us (new or already queued)
 
@@ -129,6 +153,9 @@ class Engine:
             self.alert(self.summary.stop_reason)
         except SetupIncomplete as exc:  # the remedy is different from a login, so the advice is too
             self.summary.stop_reason = str(exc)
+            self.alert(self.summary.stop_reason)
+        except BrowserGone as exc:  # not a failure of any job: the job in hand keeps its status, and the run says what to do
+            self.summary.stop_reason = f"{exc}. Open the browser again (the panel's \"Open the browser\" step), log in if asked, then re-run."
             self.alert(self.summary.stop_reason)
         self.summary.stop_reason = self.summary.stop_reason or (
             "queue exhausted" if self.summary.items else self._explain_empty_queue()
@@ -185,9 +212,12 @@ class Engine:
     def _explain_empty_queue(self) -> str:
         counts = self.db.counts(self.adapter.name).get(self.adapter.name, {})
         summary = ", ".join(f"{n} {status}" for status, n in sorted(counts.items())) or "nothing"
+        company_sites = counts.get(Status.SKIPPED_EXTERNAL.value, 0)
+        agent = (f". {company_sites} of them were set aside as company-site jobs, before the AI agent was on: re-checking them hands them to it"
+                 if self.external is not None and company_sites else "")
         return (
             f"nothing to process: the portal showed {self._discovered} jobs but all were already handled in "
-            f"earlier runs ({summary}). Edited your criteria? Tick \"Also re-check jobs skipped earlier\" in the panel (or use --reevaluate)"
+            f"earlier runs ({summary}){agent}. Edited your criteria? Tick \"Also re-check jobs skipped earlier\" in the panel (or use --reevaluate)"
         )
 
     def _note(self, message: str) -> None:
@@ -243,6 +273,8 @@ class Engine:
                 except (NotLoggedIn, SetupIncomplete):
                     raise  # a login wall or an unfinished setup is not "0 jobs": stop the run and say so
                 except Exception as exc:  # one bad query must not sink the run
+                    if self._recover_tab():  # ...but a closed tab is not a bad query: a new one, and the query again
+                        continue
                     self._note(f"query failed ({type(exc).__name__}: {exc}): {query}")
                     self._save_evidence(query, "query failed")
                     break
@@ -259,8 +291,12 @@ class Engine:
         for card in cards:
             if self._budget_exhausted():
                 return
+            if self._skip_twin(card):
+                continue
             result = self._attempt(card)
             self._attempted.add(card.url)
+            if result.status is Status.FAILED and not result.blameless and self._role(card):
+                self._failed_roles[self._role(card)] = result.reason
             self.db.set_status(card, result)
             self.summary.record(card, result)
             log.info("%s | %s @ %s | %s %s", result.status.value, card.title, card.company, card.url, result.reason)
@@ -268,9 +304,25 @@ class Engine:
                 return
             self._pace()
 
+    @staticmethod
+    def _role(card: JobCard) -> Optional[Tuple[str, str]]:
+        """Which role a listing is for. The same posting is often listed once per city; with no company or title there is no telling."""
+        company, title = (" ".join(text.lower().split()) for text in (card.company, card.title))
+        return (company, title) if company and title else None
+
+    def _skip_twin(self, card: JobCard) -> bool:
+        """A role that has just failed is not tried again under another city's listing: it would fail the same way, and each try costs a page
+        load and a click. Only for this run, and the job keeps its status, so the next run tries it afresh."""
+        role = self._role(card)
+        if role is None or role not in self._failed_roles:
+            return False
+        self._attempted.add(card.url)  # (a suggested run loops until nothing is left to try: this must not stay in its queue)
+        self._note(f"left alone this run, the same role already failed ({self._failed_roles[role][:100]}): {card.title} @ {card.company} | {card.url}")
+        return True
+
     # -- one job -----------------------------------------------------------------
     def _attempt(self, card: JobCard) -> Result:
-        challenges = rounds = 0
+        challenges = rounds = reopens = 0
         while True:
             self.resolver.reset()
             try:
@@ -289,7 +341,25 @@ class Engine:
             except NotLoggedIn:
                 raise  # session expired mid-run: stop, don't mark every remaining job failed
             except Exception as exc:
+                if self._recover_tab():  # the tab was closed under the job: it is not the job's, or the site's, fault
+                    if not self._applying or self.dry_run:  # nothing could have been sent: the same job, in the new tab
+                        reopens += 1
+                        if reopens <= MAX_REOPENS:
+                            continue
+                        return self._failure(card, exc)  # it keeps closing its tab: that one is about this job
+                    return Result(Status.FAILED, "the browser tab was closed while applying, so it may or may not have gone out: "
+                                                 "check this job by hand before it is tried again", blameless=True)
                 return self._failure(card, exc)
+
+    def _recover_tab(self) -> bool:
+        """The tab this run drives was closed (by you, or by a crash): True once a fresh one is open, in the same browser and still logged in.
+        False when the tab is fine, so whatever just failed was something else. Raises BrowserGone when the browser itself is gone."""
+        if not self.adapter.tab_lost():
+            return False
+        if not self.adapter.reopen_tab():
+            raise BrowserGone("the automation browser was closed")
+        self._note("the browser tab was closed: opened a new one and carried on")
+        return True
 
     def _attention(self) -> Optional[Attention]:
         """What the adapter may use to wait for you at the form itself. With no panel to answer in, there is nobody to wait for."""
@@ -301,16 +371,20 @@ class Engine:
         return max(0.0, min(self.criteria.answer_wait_s, self.deadline - self.clock()))
 
     def _try_once(self, card: JobCard) -> Result:
+        self._applying = False
         self.resolver.attention = self._attention()
         job: Job = self.adapter.read_job(card)
         if job.already_applied:
             return Result(Status.SKIPPED_DUPLICATE, "portal says already applied")
+        if job.closed:
+            return Result(Status.SKIPPED_MATCH, CLOSED_REASON)  # nothing to press: it would only fail
         decision = self._judge(job)
         if not decision.ok:
             return Result(Status.SKIPPED_MATCH, decision.reason, decision.score)
         if not self.dry_run:
             self._attempts += 1  # counted BEFORE the click: a failed or ambiguous attempt still used one
         try:
+            self._applying = True
             result = self.adapter.apply(job, self.resolver, self.dry_run)
         except NeedsAnswer:
             if self.adapter.parks_before_sending:
@@ -323,6 +397,9 @@ class Engine:
         except NothingSent:
             self._give_back_attempt()  # still a failure to report, but no application went out
             raise
+        if result.status is Status.SKIPPED_EXTERNAL and result.elsewhere and self.external is not None:
+            log.info("handing to the AI agent: %s @ %s (%s)", job.title, job.company, result.reason)
+            result = self.external(job, max(0.0, (self.deadline - self.clock()) / 60))  # keeps the attempt if it really sent something
         if result.status in NOTHING_TRIED:
             self._give_back_attempt()  # nothing was pressed: a job that cannot be applied to must not use up the run's attempts
         result.score = decision.score
@@ -336,10 +413,7 @@ class Engine:
     def _judge(self, job: Job) -> Decision:
         if self.suggested:
             return accept_suggested(job, self.profile, self.criteria)
-        decision = evaluate(job, self.profile, self.criteria)
-        if not decision.ok and decision.rescuable and self.fit_judge is not None:
-            decision = self.fit_judge(job, decision)  # the title said no: let the description have its say
-        return decision
+        return judge(job, self.profile, self.criteria, self.fit_judge)  # (the title said no: the description may have its say)
 
     def _give_back_attempt(self) -> None:
         if not self.dry_run:
@@ -369,16 +443,27 @@ class Engine:
         return bool(self.summary.stop_reason)
 
     def _should_stop(self, result: Result) -> bool:
-        self._fail_streak = self._fail_streak + 1 if result.status is Status.FAILED else 0
+        if not result.blameless:  # a tab closed under a job says nothing about whether the site's selectors broke
+            if result.status is Status.FAILED:
+                self._fail_streak += 1
+                self._fail_reasons.append(result.reason)
+            else:
+                self._fail_streak, self._fail_reasons = 0, []
         if self._fail_streak >= self.criteria.max_consecutive_failures:
-            self.summary.stop_reason = (
-                f"{self._fail_streak} failures in a row: selectors probably broke, see failures/ and run `jobapply probe`"
-            )
+            self.summary.stop_reason = self._failure_streak_reason()
             return True
         self._challenge_streak = self._challenge_streak + 1 if result.status is Status.SKIPPED_CHALLENGE else 0
         if self._challenge_streak >= self.criteria.breaker_threshold:
             return self._back_off()
         return False
+
+    def _failure_streak_reason(self) -> str:
+        """Why the run stopped. When every failure in the streak said the same thing, that is the news (a network that refuses a script, say);
+        'selectors probably broke' is only the usual guess, and was all this used to say."""
+        hint = "selectors probably broke, see failures/ and run `jobapply probe`"
+        if len(set(self._fail_reasons)) == 1 and self._fail_reasons[0]:
+            return f"{self._fail_streak} failures in a row, every one: {self._fail_reasons[0][:300]}. If that does not explain it, {hint}"
+        return f"{self._fail_streak} failures in a row: {hint}"
 
     def _back_off(self) -> bool:
         backoff = self.criteria.breaker_backoff_s
@@ -428,8 +513,4 @@ class Engine:
             self.sleep(min(self.criteria.poll_s, remaining))
 
     def _pace(self) -> None:
-        low, high = self.criteria.pacing_min_s, self.criteria.pacing_max_s
-        if self.adapter.pacing_floor_s:  # the portal asked for gentler pacing than the settings give
-            low, high = max(low, self.adapter.pacing_floor_s[0]), max(high, self.adapter.pacing_floor_s[1])
-        delay = self.rng.uniform(low, high)
-        self.sleep(max(0.0, min(delay, self.deadline - self.clock())))
+        self.sleep(max(0.0, min(pace_delay(self.adapter, self.criteria, self.rng), self.deadline - self.clock())))

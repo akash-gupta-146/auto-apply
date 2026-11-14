@@ -8,6 +8,7 @@
   --danger: #9b1c1c;
   --ok: #14663a;
   --warn: #8a4b00;
+  --neutral: #6b7785;  /* graphics only (3.7:1): the dashboard's 'skipped', so the biggest slice does not outshout 'submitted' */
   --line: #66737f;
   --hi: #ffffff;
   --lo: #b4bdca;
@@ -39,11 +40,20 @@ code { background: transparent; box-shadow: var(--inset-sm); border-radius: 8px;
 /* the shell */
 .top { max-width: 1240px; margin: 0 auto 28px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
 .top-right { display: flex; gap: 14px; align-items: center; }
+.tabs { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 16px; margin-top: 4px; }
+.tab { min-height: 48px; padding: 8px 26px; font-weight: 650; }
+.tab[aria-selected="true"] { box-shadow: var(--inset-sm); color: var(--accent); }  /* the chosen tab is pressed in */
+.badge { margin-left: 10px; padding: 2px 12px; border-radius: 999px; box-shadow: var(--inset-sm); font-size: .85rem; font-weight: 650; color: var(--muted); }
+.badge[data-kind="urgent"] { color: var(--danger); }
+.tabpanel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+.tabpanel[hidden] { display: none; }  /* the display above would otherwise win over the hidden attribute */
+.agent-live { margin-top: 28px; }
+.feed { padding-left: 20px; font-size: 0.95rem; }
 .sub, .hint { color: var(--muted); }
 .hint { font-size: .92rem; }
 .layout { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px; align-items: start; }
 .left { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }  /* minmax(0): never grow to the widest child */
-.right { position: sticky; top: 20px; }
+.right { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 28px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 28px; align-items: start; }
 .banner { max-width: 1240px; margin: 0 auto 24px; padding: 14px 20px; border: 2px solid var(--warn); border-radius: 14px; }
 
@@ -108,6 +118,10 @@ button:disabled { color: var(--muted); box-shadow: none; cursor: not-allowed; }
 .saved .q { font-weight: 400; }  /* the question is plain text; your answer under it is the bold part */
 .saved li > form { margin: 0; flex: none; }
 .saved .edit { margin-top: 6px; }
+.saved li.decide { flex-wrap: wrap; }  /* a disagreement and its two choices: the choices drop below on a narrow screen instead of pushing the page wider */
+.saved li.decide .what { flex: 1 1 14rem; }
+.saved li > .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.saved .saved { margin-top: 8px; }  /* the wordings of one question, inside its group */
 .saved .edit > summary { display: inline-flex; align-items: center; min-height: 32px; padding: 0 6px; margin-left: -6px; cursor: pointer;
   color: var(--accent); font-weight: 600; }  /* a text link, but a real target: WCAG 2.2 wants at least 24px each way */
 .saved .edit form { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
@@ -116,7 +130,7 @@ button:disabled { color: var(--muted); box-shadow: none; cursor: not-allowed; }
 /* fields */
 label { display: block; font-weight: 650; margin: 16px 0 6px; }
 .field label { margin-top: 12px; }
-input[type=text], input[type=email], input[type=tel], input[type=number], input[type=password], input[type=file], textarea, select {
+input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number], input[type=password], input[type=file], textarea, select {
   width: 100%; min-height: 46px; padding: 10px 14px; font: inherit; color: var(--text); background: var(--bg);
   border: 2px solid var(--line); border-radius: 12px; box-shadow: var(--inset-sm);
 }
@@ -243,7 +257,120 @@ html.gone body > :not(#goodbye):not(#announce) { display: none; }
 }
 @media (forced-colors: active) {
   .btn[data-waiting] { border: 5px solid Highlight; }  /* shadows are gone in this mode: a thick highlighted border takes the glow's place */
+  .tab[aria-selected="true"] { border-style: double; border-width: 5px; }  /* no shadows in this mode: a thicker double border says "chosen" */
   .card, section, fieldset, .btn, button, .pill, .well, .chip, .status, .num, dialog, pre, .goodbye-text, .help-tip { border: 2px solid CanvasText; box-shadow: none; }
   .reports .btn[aria-expanded="true"] { border-style: double; border-width: 5px; }  /* no shadows in this mode: a thicker double border says "pressed" */
   .step[aria-current="step"] { outline: 4px solid Highlight; }
 }
+
+/* the Profile tab's dashboard. Soft pastel fills, each with a dark outline in one of the tested colours: the outline is what meets the
+   3:1 rule for shapes, the text on every fill is dark, and every number is also written out (the chips, the table). */
+.seg-submitted { --fill: #bfe6cc; --ink: var(--ok); }
+.seg-rehearsed { --fill: #bdd6f3; --ink: var(--accent); }
+.seg-skipped { --fill: #d3dae6; --ink: var(--neutral); }
+.seg-errors { --fill: #f6c5c5; --ink: var(--danger); }
+.seg-waiting { --fill: #f7dfb1; --ink: var(--warn); }
+.dash-top { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; margin-bottom: 8px; }
+.donut { width: 190px; height: 190px; flex: none; }
+.donut .seg { fill: var(--fill); stroke: var(--ink); stroke-width: .5px; stroke-linejoin: round; }
+.donut-number { font-size: 8px; font-weight: 700; fill: var(--text); }
+.donut-unit { font-size: 3.2px; fill: var(--muted); }
+.pick { cursor: pointer; }
+.seg.pick:hover, .seg[data-chosen] { stroke-width: 1.1px; }
+.kpis { flex: 1 1 320px; display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 14px; }  /* three across: five tiles do not leave one alone */
+.kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px 12px; font: inherit; color: var(--text);
+       text-align: left; cursor: pointer; background: var(--fill); border: 2px solid var(--ink); border-radius: 16px; box-shadow: var(--raised-sm); }
+.kpi:hover { box-shadow: 0 0 0 2px var(--fill), var(--raised-sm); }
+.kpi[data-chosen] { box-shadow: inset 0 0 0 2px var(--ink); }  /* chosen: a double outline, not only a colour */
+.kpi-name { font-weight: 650; font-size: .92rem; }
+.kpi-num { font-size: 1.8rem; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.2; }
+#h-dash-sites { margin: 30px 0 4px; }
+#dash-scale { margin: 0 0 16px; }
+.dash-rows { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 18px; }
+.dash-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 3.2em; gap: 6px 14px; align-items: center; }
+.dash-name { font-weight: 650; }
+.dash-total { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar { display: block; width: 100%; height: 22px; border-radius: 11px; overflow: hidden; box-shadow: var(--inset-sm); }
+.bar-track { fill: none; }
+.bar .seg { fill: var(--fill); stroke: var(--ink); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }  /* the outline also tells neighbours apart */
+.bar .seg.pick:hover, .bar .seg[data-chosen] { stroke-width: 3px; }
+.dash-facts { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: .9rem; }
+.dash-facts .chip { font: inherit; font-size: .88rem; color: var(--text); background: var(--fill); border: 1.5px solid var(--ink); border-radius: 999px;
+        padding: 3px 12px; min-height: 28px; cursor: pointer; }
+.dash-facts .chip:hover { box-shadow: 0 0 0 2px var(--fill); }
+.dash-facts .chip[data-chosen] { box-shadow: inset 0 0 0 2px var(--ink); font-weight: 650; }
+.dash-list { margin: 8px 0 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.dash-list-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+#dash-list .hint { margin: 6px 0 10px; }
+#dash-list th, #dash-list td { text-align: left; vertical-align: top; }
+#dash-list th, #dash-list td { overflow-wrap: normal; }  /* the page-wide "break anywhere" would let a column shrink until a word splits ("Compan-y") */
+#dash-list tbody th { overflow-wrap: anywhere; }  /* ...but a job's title may be one very long word, and it alone may break */
+#dash-list td.short { white-space: nowrap; }  /* a site's name and a time stay on one line: it is the job's title and company that wrap */
+.dash-sub { display: block; color: var(--muted); font-weight: 400; font-size: .86rem; }
+.dash-table summary { cursor: pointer; font-weight: 650; }
+.table-wrap { overflow-x: auto; margin-top: 12px; }
+.dash-table table, .dash-list table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+#dash-list-wrap { max-height: 50vh; overflow-y: auto; }  /* half the screen at most: a long list scrolls inside itself, never down the page */
+#dash-list thead th { position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); }  /* the headings stay while the rows scroll */
+.dash-list table { min-width: 34rem; }  /* on a narrow screen the list scrolls sideways inside itself: a squeezed title column would be a tower of one-word lines */
+.dash-table caption { text-align: left; font-weight: 650; padding-bottom: 6px; }
+.dash-table th, .dash-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--line); }
+.dash-list th, .dash-list td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.dash-table th[scope="row"], .dash-table thead th:first-child { text-align: left; }
+.dash-table tfoot th, .dash-table tfoot td { font-weight: 700; }
+@media (forced-colors: active) {  /* the user's own colours: shapes keep apart by their outlines, labels and the table */
+  .seg-submitted { --fill: Highlight; --ink: CanvasText; }
+  .seg-rehearsed { --fill: LinkText; --ink: CanvasText; }
+  .seg-skipped { --fill: GrayText; --ink: CanvasText; }
+  .seg-errors { --fill: Mark; --ink: CanvasText; }
+  .seg-waiting { --fill: VisitedText; --ink: CanvasText; }
+  .donut-number, .donut-unit { fill: CanvasText; }
+  .kpi[data-chosen], .dash-facts .chip[data-chosen] { outline: 3px solid CanvasText; }
+}
+@media (max-width: 520px) {  /* a phone: name and total share a line, and the bar gets the whole width under them */
+  .dash-row { grid-template-columns: minmax(0, 1fr) 3.2em; }
+  .dash-name { grid-column: 1; grid-row: 1; }
+  .dash-total { grid-column: 2; grid-row: 1; }
+  .dash-row .bar { grid-column: 1 / -1; grid-row: 2; }
+  .dash-facts { grid-column: 1 / -1; grid-row: 3; }
+  .donut { margin: 0 auto; }
+}
+
+/* Ask the AI: under Output, on the AI agent tab only. The column sticks to the window, so while this card is there it gets the
+   window's height and the two cards share it (a sticky column taller than the window cannot be scrolled to its end). */
+.layout[data-tab="tab-agent"] .right { height: calc(100vh - 40px); }
+.layout[data-tab="tab-agent"] .console-card { flex: 0 1 200px; min-height: 160px; max-height: none; }  /* what Output needs; the question box gets the rest */
+.layout[data-tab="tab-agent"] .console-card .log { min-height: 60px; }
+.ask-card { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }  /* scrolls only if even the form does not fit */
+.ask-card { padding: 16px 20px; }
+.ask-card h2, .ask-about { margin: 0; }
+.ask-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+.ask-scroll { flex: 1 1 0; min-height: 60px; overflow-y: auto; display: grid; align-content: start; gap: 10px; }  /* the talk (or the suggestions) scrolls; the question box stays in view */
+.ask-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ask-log:empty { display: none; }
+.ask-msg { padding: 10px 14px; border-radius: 14px; box-shadow: var(--inset-sm); }
+.ask-user { margin-left: 24px; }
+.ask-assistant { margin-right: 24px; }
+.ask-problem { border: 2px solid var(--danger); }
+.ask-who { font-size: .82rem; color: var(--muted); }
+.ask-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-sent { margin: 6px 0 0; font-size: .82rem; color: var(--muted); }
+.ask-form { display: grid; gap: 6px; flex: none; }
+#ask-starters .hint { margin: 0 0 6px; }
+.ask-more summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
+.ask-more .hint { margin: 6px 0 0; }
+.ask-card .hint { margin: 0; }
+.ask-form textarea { width: 100%; font: inherit; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 12px; padding: 8px 12px; resize: vertical; }
+.ask-status { color: var(--muted); font-weight: 600; align-self: center; }
+@media (max-width: 980px) {  /* one column: the cards are not stuck to the window, so each is as tall as it needs (after the rules above, which would win) */
+  .layout[data-tab="tab-agent"] .right { height: auto; }
+  .layout[data-tab="tab-agent"] .console-card { flex: 0 0 auto; min-height: 440px; }
+  .layout[data-tab="tab-agent"] .console-card .log { min-height: 280px; }
+  .ask-card { flex: 0 0 auto; overflow-y: visible; }
+  .ask-scroll { flex: 0 1 auto; max-height: 50vh; min-height: 0; }
+}
+@media (max-height: 700px) and (min-width: 981px) {  /* a short window: Output gives a little more up, so the question box still fits */
+  .layout[data-tab="tab-agent"] .console-card { flex-basis: 130px; min-height: 110px; }
+}
+/* The Profile tab has no use for Output, so the column is gone there and everything gets the whole page. */
+.layout[data-tab="tab-profile"] { grid-template-columns: minmax(0, 1fr); }

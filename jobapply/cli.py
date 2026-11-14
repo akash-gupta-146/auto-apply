@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import logging
+import os
 import signal
 import sys
 from pathlib import Path
@@ -11,6 +12,11 @@ from typing import List, Optional
 
 from . import __version__
 from .adapters import ADAPTERS
+from .adapters.naukri_probe import pick_job, probe_bar
+from .agent import command as agent_command
+from .agent.handoff import Handoff, agent_builder
+from .agent.hitl import APPROVE, REJECT
+from .agent.session import Session
 from .ai_answers import build_answerer
 from .ai_facts import FactJudge, build_fact_judge
 from .ai_fit import FitJudge
@@ -19,7 +25,8 @@ from .ai_settings import about_files, check_all, load_ai_settings
 from .answer_book import AnswerBook
 from .answer_tidy import apply_plan, describe, plan_tidy
 from .answers import AnswerResolver, normalize
-from .browser import DEFAULT_CDP, DOWN, READY, WINDOWLESS, cdp_state, explain_no_window, find_browser, launch_browser, open_page
+from .agent.tabs import about_a_job
+from .browser import AGENT_URL_ENV, DEFAULT_CDP, DOWN, READY, WINDOWLESS, active_page, cdp_state, explain_no_window, find_browser, launch_browser, open_page
 from .config import (
     ConfigError,
     Paths,
@@ -33,10 +40,12 @@ from .config import (
 from .db import Database
 from .engine import Engine
 from .matching import evaluate
-from .models import JobCard, SetupIncomplete
+from .models import JobCard, SetupIncomplete, Status
 from .report import write_report
 from .resume import guess_facts, read_text, sync_profile
 from .system import announce, keep_awake
+from .triage import Triage
+from .web import questions
 from .web.server import DEFAULT_PORT, serve
 
 PORTAL_URLS = {
@@ -177,25 +186,58 @@ def cmd_browser(args) -> None:
         print(f"  {portal:10} {url}")
 
 
-def _require_browser(cdp: str) -> None:
+def _require_browser(cdp: str, can_open_a_window: bool = False) -> None:
+    """`can_open_a_window`: a job page address was given, and opening it also brings back a window the browser lost."""
     state = cdp_state(cdp)
     if state == DOWN:
         raise ConfigError(f"No browser on {cdp}. Run `jobapply browser`, log in to the portal, then retry.")
-    if state == WINDOWLESS:
+    if state == WINDOWLESS and not can_open_a_window:
         raise ConfigError(explain_no_window(cdp))
+
+
+def _adopt_resume(resume: Optional[str], profile: Profile, paths: Paths) -> None:
+    """Use the resume given on the command line (learning its skills), or the one already in the profile. One of them is needed."""
+    if resume:
+        added = sync_profile(profile, Path(resume).expanduser())
+        save_profile(profile, paths)
+        if added:
+            logging.info("new skills from this resume: %s (set their years in profile.yaml)", ", ".join(added))
+    if not profile.resume_path:
+        raise ConfigError("Pass --resume <path-to-resume>")
+
+
+NO_GUESS_HELP = ("with --ai: do not let the AI agent guess a question nothing else can answer (default: it guesses, says so, and lists every "
+                 "guess when it asks to send; it never guesses when sending without your approval)")
+
+
+def cmd_agent(args) -> None:
+    """The AI agent: apply on whatever job page is open in the browser. A rehearsal unless --submit, and even then only after you approve."""
+    paths = Paths.from_env()
+    setup_logging(paths)
+    if args.approve or args.reject:
+        print(agent_command.decide(paths, APPROVE if args.approve else REJECT))
+        return
+    profile = load_profile(paths)
+    _adopt_resume(args.resume, profile, paths)
+    session = Session.latest_open(paths.agent_dir) if args.continue_session else None
+    if args.continue_session and session is None:
+        raise ConfigError("There is no unfinished application to continue.")
+    _require_browser(args.cdp, can_open_a_window=bool(args.url))
+    db = Database(paths.db)
+    ai = build_answerer(paths, profile, db, "agent") if args.ai else None
+    book = AnswerBook(paths, FactJudge.from_answerer(ai, paths.facts_log) if ai is not None else None)
+    build = agent_builder(profile, paths, db, book, ai, submit=args.submit, ask_approval=not args.no_approval, guess=not args.no_guess)
+    with keep_awake(), active_page(args.cdp, "" if args.continue_session else args.url, about_a_job) as page:
+        agent = build(page, session, args.minutes)
+        finished = agent.run()
+    announce(agent.verdict or agent_command.summary(finished))
 
 
 def cmd_run(args) -> None:
     paths = Paths.from_env()
     setup_logging(paths)
     profile, criteria = load_profile(paths), load_criteria(paths)
-    if args.resume:
-        added = sync_profile(profile, Path(args.resume).expanduser())
-        save_profile(profile, paths)
-        if added:
-            logging.info("new skills from this resume: %s (set their years in profile.yaml)", ", ".join(added))
-    if not profile.resume_path:
-        raise ConfigError("Pass --resume <path-to-resume>")
+    _adopt_resume(args.resume, profile, paths)
     if not criteria.target_roles:
         raise ConfigError(f"No target_roles in {paths.criteria}. Run `jobapply init`.")
     _require_browser(args.cdp)
@@ -211,8 +253,13 @@ def cmd_run(args) -> None:
         adapter.prompt_judge = popups  # with the AI helper on, a pop-up the rules do not know is asked about too
         if args.sync_resume:
             adapter.sync_resume(Path(profile.resume_path))
+        handoff = None
+        if args.agent:  # a job the portal cannot apply to itself goes to the agent, in the same tab
+            build = agent_builder(profile, paths, db, book, ai, submit=not args.dry_run, ask_approval=not args.no_approval,
+                                  answer_wait_s=criteria.answer_wait_s, guess=not args.no_guess)
+            handoff = Handoff(adapter, paths, build)
         engine = Engine(
-            adapter, db, profile, criteria, resolver,
+            adapter, db, profile, criteria, resolver, external=handoff,
             minutes=args.minutes, dry_run=args.dry_run, reevaluate=args.reevaluate, suggested=args.suggested, fit_judge=judge, max_attempts=args.attempts,
             answers_loader=book.wordings,  # so an answer typed in the panel reaches a job that is waiting
         )
@@ -228,7 +275,29 @@ def cmd_run(args) -> None:
         summary.notes += [f"AI switch: {note}" for note in ai.client.switches]  # which company answered is worth knowing
     summary.dismissed = list(adapter.dismissed)
     report = write_report(summary, paths.reports)
-    announce(f"{args.portal} {'dry-run ' if args.dry_run else ''}finished: {summary.done} done, stopped: {summary.stop_reason}. Report: {report}")
+    announce(f"{args.portal} {'dry-run ' if args.dry_run else ''}finished: {summary.done} done, stopped: {summary.stop_reason}. Report: {report}"
+             + (f" {summary.waiting}" if summary.waiting else ""))
+
+
+def cmd_triage(args) -> None:
+    """Read the jobs searches found and no run has opened, judge them the way a run does, and send nothing (see triage.py)."""
+    paths = Paths.from_env()
+    setup_logging(paths)
+    profile, criteria = load_profile(paths), load_criteria(paths)
+    if not criteria.target_roles:
+        raise ConfigError(f"No target_roles in {paths.criteria}. Run `jobapply init`.")
+    _require_browser(args.cdp)
+    db = Database(paths.db)
+    ai = build_answerer(paths, profile, db, args.portal) if args.ai else None
+    judge = FitJudge.from_answerer(ai, criteria.target_roles, paths.ai_fit_log) if ai is not None else None
+    with keep_awake(), open_page(args.cdp) as page:
+        triage = Triage(ADAPTERS[args.portal](page, profile, criteria, paths.failures), db, profile, criteria, limit=args.limit, minutes=args.minutes, fit_judge=judge)
+        try:
+            summary = triage.run()
+        except KeyboardInterrupt:
+            summary = triage.summary
+            summary.stop_reason = "interrupted by user"
+    announce(" ".join(summary.lines()))
 
 
 def cmd_probe(args) -> None:
@@ -236,9 +305,19 @@ def cmd_probe(args) -> None:
     paths = Paths.from_env()
     setup_logging(paths)
     profile, criteria = load_profile(paths), load_criteria(paths)
+    if args.chat and args.portal != "naukri":
+        sys.exit("--chat reads Naukri's question side bar: use `jobapply probe naukri --chat`.")
+    job = None
+    if args.chat:  # decided before any browser opens: only a job Naukri has already asked questions on may be pressed (see naukri_probe.py)
+        job, why_not = pick_job(Database(paths.db).candidates("naukri", [Status.NEEDS_ANSWER]), args.url)
+        if job is None:
+            sys.exit(why_not)
     _require_browser(args.cdp)
     with open_page(args.cdp) as page:
         adapter = ADAPTERS[args.portal](page, profile, criteria, paths.failures)
+        if job is not None:
+            print(*probe_bar(adapter, job.url).lines(), sep="\n")
+            return
         try:
             logged_in = adapter.is_logged_in()
             print("logged in:", logged_in)
@@ -301,9 +380,7 @@ def cmd_answers(args) -> None:
     db = Database(paths.db)
     if args.set:
         question, answer = args.set
-        folded = AnswerBook(paths, build_fact_judge(paths)).remember(question, answer, [row["raw"] for row in db.pending_questions()])
-        for wording in [question, *folded]:
-            db.drop_question(normalize(wording))
+        folded = questions.add(paths, question, answer, build_fact_judge(paths)).folded
         print("saved." + (f" It also answers {len(folded)} other way(s) of asking: {'; '.join(folded)}" if folded else ""))
         return
     known = {normalize(k) for k in AnswerBook(paths).wordings()}
@@ -353,13 +430,42 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sync-resume", action="store_true", help="upload the resume to the portal profile first (naukri)")
     p.add_argument("--ai", action="store_true",
                    help="let your AI helper answer form questions, only from your own documents (set up in `jobapply panel`)")
+    p.add_argument("--agent", action="store_true",
+                   help="a job the site cannot apply to itself (it applies on the company's own site) goes to the AI agent instead of being skipped")
+    p.add_argument("--no-approval", action="store_true",
+                   help="with --agent on a live run: let the agent send without waiting for your approval each time (default: it waits)")
+    p.add_argument("--no-guess", action="store_true", help=NO_GUESS_HELP)
     p.set_defaults(func=cmd_run)
+
+    p = with_cdp(sub.add_parser("agent", help="AI agent: apply on the job page open in your browser (a rehearsal unless --submit)"))
+    p.add_argument("--url", default=os.environ.get(AGENT_URL_ENV, ""),
+                   help=f"the job page's address, opened in the agent's browser (default: ${AGENT_URL_ENV}, else the job page already open there)")
+    p.add_argument("--resume", help="resume file to use (PDF/DOCX/TXT); default: the one in your profile")
+    p.add_argument("--minutes", type=float, default=30, help="time budget (default %(default)s)")
+    p.add_argument("--submit", action="store_true", help="really send, after you approve each application (default: stop before the final button)")
+    p.add_argument("--ai", action="store_true", help="let the AI helper answer new questions and read pages the rules cannot")
+    p.add_argument("--no-approval", action="store_true", help="with --submit: send without waiting for your approval each time (default: it waits)")
+    p.add_argument("--no-guess", action="store_true", help=NO_GUESS_HELP)
+    p.add_argument("--continue", dest="continue_session", action="store_true", help="carry on with the application that was left unfinished")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--approve", action="store_true", help="approve the application that is waiting to be sent")
+    group.add_argument("--reject", action="store_true", help="refuse the application that is waiting to be sent")
+    p.set_defaults(func=cmd_agent)
 
     p = sub.add_parser("ai-test", help="check that the AI helper's key and model work (sends none of your documents)")
     p.set_defaults(func=cmd_ai_test)
 
+    p = with_cdp(sub.add_parser("triage", help="read the jobs waiting in the queue and sort them (nothing is sent): rejects out, good ones first"))
+    p.add_argument("portal", choices=sorted(ADAPTERS))
+    p.add_argument("--limit", type=int, default=50, help="how many jobs to read (default 50; run it again to carry on)")
+    p.add_argument("--minutes", type=float, default=30, help="stop after this long (default 30)")
+    p.add_argument("--ai", action="store_true", help="let the AI read the description of a job whose title alone was refused, as `run --ai` does")
+    p.set_defaults(func=cmd_triage)
+
     p = with_cdp(sub.add_parser("probe", help="read-only adapter smoke test"))
     p.add_argument("portal", choices=sorted(ADAPTERS))
+    p.add_argument("--chat", action="store_true", help="naukri only: open a job that has questions and report what its question side bar looks like (answers nothing)")
+    p.add_argument("--url", default="", help="with --chat: which job (it must be one parked as needing answers); default: the first")
     p.set_defaults(func=cmd_probe)
 
     p = sub.add_parser("status", help="queue counts, AI usage, latest report")

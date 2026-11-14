@@ -1,0 +1,14 @@
+.env
+*.db
+data/
+*.pdf
+*.docx
+venv/
+.venv/
+node_modules/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.DS_Store
+graphify-out/
+.vscode/

@@ -9,10 +9,11 @@ from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import httpx
 
-from . import pages
+from . import applications, applications_page, pages
 from ..ai_facts import build_fact_judge
 from ..ai_fill import suggest
 from ..ai_providers import add_custom_provider, remove_custom_provider
+from ..answer_health import keep_mine, merge_alike, report, use_profile
 from ..ai_settings import (AiSettings, about_files, check_all, load_ai_settings, make_client, read_notes,
                            save_ai_settings, save_notes)
 from ..config import ConfigError, Criteria, Paths, Profile, load_criteria, load_profile, save_criteria, save_profile
@@ -20,6 +21,7 @@ from ..db import Database
 from ..llm import BudgetExceeded, LlmError
 from ..resume import guess_facts, read_text, sync_profile
 from .ai_form import MAX_BACKUPS, backup_fields, parse_ai_form
+from .health_page import health_page
 from . import questions
 from .forms import (
     ALL_FIELDS,
@@ -247,9 +249,24 @@ class UiApp:
             if path.name == name:  # only names we listed ourselves: nothing typed can point elsewhere
                 path.unlink()
 
+    # -- the applications page (the AI agent) ----------------------------------------------------
+    def applications_html(self) -> str:
+        return applications_page.applications_page(self.token, applications.snapshot(self.paths))
+
+    def agent_decide(self, session_id: str, decision: str) -> bool:
+        return applications.decide(self.paths, session_id, decision)
+
+    def agent_pause(self, paused: bool) -> None:
+        applications.pause(self.paths, paused)
+
     # -- the questions page ----------------------------------------------------------------------
-    def questions_html(self, banner: Tuple[str, str] = ("", ""), saved_open: bool = False) -> str:
-        return pages.questions_page(self.token, questions.waiting(self.paths), banner, questions.saved(self.paths), saved_open)
+    def questions_html(self, banner: Tuple[str, str] = ("", ""), saved_open: bool = False, draft: Tuple[str, str] = ("", "")) -> str:
+        return pages.questions_page(self.token, questions.waiting(self.paths), banner, questions.saved(self.paths), saved_open, draft,
+                                    questions.guesses(self.paths))
+
+    def add_answer(self, question: str, answer: str) -> questions.Added:
+        """A question and answer typed by hand. Raises questions.NotSaved, with a sentence to show, if it cannot be kept."""
+        return questions.add(self.paths, question, answer, build_fact_judge(self.paths))  # None when no AI is set up: saved as typed
 
     def accept_answers(self, form: Mapping[str, str]) -> int:
         return questions.save(self.paths, form, build_fact_judge(self.paths))  # None when no AI is set up: saved as typed
@@ -257,8 +274,31 @@ class UiApp:
     def forget_answer(self, question: str) -> bool:
         return questions.forget(self.paths, question)
 
+    def keep_guess(self, question: str) -> bool:
+        return questions.keep_guess(self.paths, question, build_fact_judge(self.paths))
+
+    def forget_guess(self, question: str) -> bool:
+        return questions.forget_guess(self.paths, question)
+
     def change_answer(self, question: str, answer: str) -> bool:
         return questions.change(self.paths, question, answer)
+
+    # -- the check my saved answers page ----------------------------------------------------------
+    def health_html(self, banner: Tuple[str, str] = ("", "")) -> str:
+        return health_page(self.token, report(self.paths, self.saved_profile(), Database(self.paths.db)), banner)
+
+    def fix_answer(self, action: str, question: str) -> bool:
+        """One button of that page. `question` only says WHICH saved answer: what it becomes comes from what is saved or from the profile."""
+        if action == "forget":
+            return questions.forget(self.paths, question)
+        if action == "merge":
+            return merge_alike(self.paths, question) > 0
+        profile = self.saved_profile()
+        if profile is None:
+            return False
+        if action == "profile":
+            return use_profile(self.paths, profile, question)
+        return action == "keep" and keep_mine(self.paths, Database(self.paths.db), profile, question)
 
     def test_ai(self) -> Tuple[str, str]:
         results = check_all(load_ai_settings(self.paths), self.http)

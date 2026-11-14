@@ -18,6 +18,7 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 import yaml
 
 from .ai_answers import CONSENT, same_answer
+from .answers import normalize
 from .config import Paths, load_answers, save_answers
 from .similarity import nearest
 
@@ -50,6 +51,20 @@ def expand(bank: Mapping[str, str], aliases: Mapping[str, str]) -> Dict[str, str
     return wording
 
 
+def entry_for(bank: Mapping[str, str], aliases: Mapping[str, str], question: str) -> str:
+    """The saved entry this question already is, however it is capitalised or punctuated (the form's own star, a missing question
+    mark): answering it again updates that entry. Two entries that differ only in punctuation would be one question twice, and
+    whichever was read last would silently win."""
+    norm = normalize(question)
+    for key in bank:
+        if normalize(key) == norm:
+            return key
+    for alias, target in aliases.items():
+        if normalize(alias) == norm:
+            return target
+    return question
+
+
 def equivalent(first: str, second: str) -> bool:
     """The same answer: the same words, or one is the first words of the other ("30" and "30 Days")."""
     return same_answer(first, second) or same_answer(second, first)
@@ -62,6 +77,19 @@ def unit_mismatch(first: str, second: str) -> bool:
         return False
     low, high = sorted(float(found[0].replace(",", "")) for found in numbers)
     return low > 0 and high / low >= UNIT_GAP
+
+
+YES_NO = re.compile(r"^(?:yes|no)\b[\s.!]*$", re.I)
+MAX_FACT_CHARS = 60  # a profile holds short facts (a figure, a name, a city); a longer answer is prose, not one of them
+
+
+def disagree(first: str, second: str) -> bool:
+    """Two answers to one fact that really say different things. Not the same words; not one figure in two units; and only answers of the same kind
+    are compared: a Yes against a phone number, or a paragraph against a degree, means a profile rule matched a WORD in a long question, not its
+    meaning (seen on real answers: 'mobile' in a question about APIs got the phone number), so there is no fact to disagree about."""
+    if bool(YES_NO.match(first.strip())) != bool(YES_NO.match(second.strip())) or max(len(first), len(second)) > MAX_FACT_CHARS:
+        return False
+    return not equivalent(first, second) and not unit_mismatch(first, second)
 
 
 def merge(bank: Dict[str, str], aliases: Dict[str, str], canonical: str, wordings: Iterable[str], answer: Optional[str] = None) -> None:
@@ -95,7 +123,7 @@ class AnswerBook:
         """Save an answer. With an AI helper, also fold into it the saved and `waiting` questions that ask the same fact; those
         wordings are returned so the caller can stop waiting on them. Saving never fails because the AI did."""
         bank, aliases = self.saved(), load_aliases(self.paths.aliases)
-        target = aliases.get(question, question)  # answering a wording we already know updates its entry
+        target = entry_for(bank, aliases, question)  # answering a wording we already know updates its entry
         bank[target] = answer
         folded = self._fold(bank, aliases, target, answer, waiting)
         save_answers(bank, self.paths.answers)

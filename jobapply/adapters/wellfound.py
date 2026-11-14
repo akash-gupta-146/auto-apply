@@ -76,7 +76,7 @@ class WellfoundAdapter(Adapter):
         button = first_visible(self.active, [SEL["apply"]])
         if button is None:
             if first_visible(self.active, [SEL["external"]]) is not None:
-                return Result(Status.SKIPPED_EXTERNAL, "applies on the company site")
+                return Result(Status.SKIPPED_EXTERNAL, "applies on the company site", elsewhere=True)
             raise RuntimeError("Apply now button not found")
         button.click()
         dialog = self.active.locator(SEL["dialog"]).first

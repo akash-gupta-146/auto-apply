@@ -20,7 +20,7 @@ import re
 from typing import Iterator
 from urllib.parse import quote_plus, urlparse
 
-from ..models import ChallengeDetected, Job, JobCard, NotLoggedIn, Result, Status
+from ..models import ChallengeDetected, Job, JobCard, NotLoggedIn, NothingSent, Result, Status
 from .base import Adapter, find_salary, first_visible, looks_like_challenge
 from .forms import click_choice, fill_form, let_person_answer, radio_groups
 
@@ -32,6 +32,7 @@ STEP_POLL_MS = 250
 CONFIRM_WAIT_MS = 10_000  # after Submit, how long Indeed gets to say the application was sent
 CONFIRM_POLL_MS = 500
 FORM_OPEN_MS = 15_000
+FORM_READY_MS = 20_000  # a step is drawn by script after the page loads: how long it gets before it counts as empty
 
 SEL = {
     "apply": "#indeedApplyButton, button[id*='indeedApply'], [data-testid*='indeedApply']",
@@ -80,6 +81,7 @@ class IndeedAdapter(Adapter):
     name = "indeed"
     logged_out_url_hints = ("secure.indeed.com/auth", "/account/login")
     pacing_floor_s = (30.0, 90.0)  # Cloudflare watches the pace: wait longer between jobs than the settings say
+    parks_before_sending = True  # Submit is pressed only after every question is answered: a parked job sent nothing
     _parked = None  # the form tab a person is being asked to help in (a captcha); kept open until they have
 
     @property
@@ -138,22 +140,27 @@ class IndeedAdapter(Adapter):
         self.goto(card.url)
         description = self._text(SEL["description"]) or self.body_text()
         salary = self._text(SEL["salary"]) or find_salary(description)
-        applied = first_visible(self.page, [SEL["apply"]]) is None and bool(APPLIED_BEFORE.search(self.body_text(2500)))
-        return Job.from_card(card, description=description[:8000], salary=salary, already_applied=applied)
+        no_button = first_visible(self.page, [SEL["apply"]]) is None
+        applied = no_button and bool(APPLIED_BEFORE.search(self.body_text(2500)))
+        closed = no_button and not applied and bool(EXPIRED.search(self.body_text(3000)))  # its own words, and nothing to press
+        return Job.from_card(card, description=description[:8000], salary=salary, already_applied=applied, closed=closed)
 
     def apply(self, job: Job, resolver, dry_run: bool) -> Result:
         self.dismiss_prompts()  # a pop-up that came up since the page was read would swallow the click on Apply
         button = first_visible(self.page, [SEL["apply"]])
         if button is None:
             closed = EXPIRED.search(self.body_text(3000))
-            return Result(Status.SKIPPED_EXTERNAL, "no longer accepting applications" if closed else "no Indeed-native apply")
+            return Result(Status.SKIPPED_EXTERNAL, "no longer accepting applications" if closed else "no Indeed-native apply", elsewhere=not closed)
         tab, is_new_tab = self._open_form(button)
         self.active = tab  # challenge checks now watch the form
         try:
             self._guard(tab)
             return self._walk(tab, resolver, dry_run)
         except OffSite as exc:
-            return Result(Status.SKIPPED_EXTERNAL, f"{exc}: not Indeed's own form, so nothing was filled in")
+            return Result(Status.SKIPPED_EXTERNAL, f"{exc}: not Indeed's own form, so nothing was filled in", elsewhere=True)
+        except RuntimeError:
+            self.capture_failure(job)  # while the form is still on screen: once its tab is closed nothing shows what was wrong
+            raise
         except ChallengeDetected:
             if is_new_tab:  # leave the tab open: the person solves the check IN it, and is_challenge() watches it
                 self._parked, is_new_tab = tab, False
@@ -206,6 +213,8 @@ class IndeedAdapter(Adapter):
             self.settle(1, 2)
             self.check_challenge()
             self._guard(tab)
+            self._wait_for_controls(tab)
+            self.check_challenge()  # the wait also ends on a human check: raise it for the engine, never fill around it
             form = first_visible(tab, [SEL["form"]]) or tab.locator("body")
             self._pick_resume(form)
             def fill():
@@ -222,16 +231,25 @@ class IndeedAdapter(Adapter):
                 return self._confirm_sent(tab)
             advance = first_visible(tab, [SEL["continue"]])
             if advance is None:
-                raise RuntimeError("the application form has neither Continue nor Submit")
+                raise NothingSent("the application form has neither Continue nor Submit")
             signature = tab.evaluate(STEP_JS)
             stalled = stalled + 1 if signature == last else 0
             if stalled >= STALLED_STEPS:
                 problem = first_visible(tab, [SEL["problem"]])
-                raise RuntimeError(f"Indeed did not accept this step: {problem.inner_text().strip() if problem else 'a required answer is missing or not valid'}")
+                raise NothingSent(f"Indeed did not accept this step: {problem.inner_text().strip() if problem else 'a required answer is missing or not valid'}")
             last = signature
             advance.click()
             self._wait_for_new_step(tab, signature)
-        raise RuntimeError("the application form did not finish")
+        raise NothingSent("the application form did not finish")
+
+    def _wait_for_controls(self, tab) -> None:
+        """A step opens empty and fills in later: type nothing until it shows a button that moves it on, not after a fixed pause.
+        A human check ends the wait at once (the caller's challenge check deals with it); a step that never draws is not an error
+        here, the caller says so."""
+        for _ in range(FORM_READY_MS // STEP_POLL_MS):
+            if first_visible(tab, [SEL["submit"], SEL["continue"]]) is not None or looks_like_challenge(tab):
+                return
+            tab.wait_for_timeout(STEP_POLL_MS)
 
     def _wait_for_new_step(self, tab, before: str) -> None:
         """Continue starts a move that lands a moment later: type nothing until the page has really changed.

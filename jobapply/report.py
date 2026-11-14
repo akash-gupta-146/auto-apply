@@ -64,6 +64,8 @@ def write_report(summary: RunSummary, reports_dir: Path) -> Path:
             + ", ".join(f"{status}={count}" for status, count in sorted(summary.queue.items())),
             "",
         ]
+    if summary.waiting:
+        lines += [summary.waiting, ""]
     for title, statuses, advice in _sections(summary.dry_run):
         rows = [(c, r) for c, r in summary.items if r.status in statuses]
         if rows:

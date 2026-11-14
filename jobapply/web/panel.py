@@ -16,16 +16,18 @@ import yaml
 
 from .. import __version__
 from ..ai_settings import load_ai_settings
-from ..browser import DEFAULT_CDP, DOWN, READY, WINDOWLESS, cdp_state, find_browser
-from ..config import Paths, Profile, load_criteria, load_profile
+from ..browser import AGENT_URL_ENV, DEFAULT_CDP, DOWN, READY, WINDOWLESS, cdp_state, find_browser
+from ..config import Paths, Profile, load_answers, load_criteria, load_profile
 from ..report_names import report_label, report_portal
-from . import hostos, privacy, questions
+from . import applications, dashboard, hostos, privacy, questions
+from .freshness import Freshness
+from .assistant import Assistant
 from .actions import ACTIONS, DEFAULT_PORTAL, PORTALS, ActionError, Options, build_command, describe, parse_options
 from .hostos import HostOS
 from .runner import FAILED, FINISHED, STOPPED, Busy, JobRunner
 
-NEEDS_BROWSER = {"check", "rehearse", "apply"}
-NEEDS_PROFILE = {"rehearse", "apply"}
+NEEDS_BROWSER = {"check", "rehearse", "apply", "agent"}
+NEEDS_PROFILE = {"rehearse", "apply", "agent"}
 FOLDERS = ("data", "reports")
 RECENT_REPORTS = 8
 MAX_REPORT_BYTES = 200_000
@@ -49,6 +51,7 @@ class Panel:
         command_for: Callable[..., List[str]] = build_command,
         browser_state: Callable[[], str] = lambda: cdp_state(DEFAULT_CDP),
         popen: Callable[..., object] = subprocess.Popen,
+        freshness: Optional[Freshness] = None,
     ):
         self.paths, self.root = paths, root
         self.runner = runner or JobRunner()
@@ -57,12 +60,15 @@ class Panel:
         self.checked: Dict[str, str] = {}  # what the last "Check" saw on each site: ok, logged_out or needs_setup
         self._action, self._portal = "", DEFAULT_PORTAL
         self._login_read_for = 0
+        self.assistant = Assistant(paths, PORTALS, DEFAULT_PORTAL)  # "Ask the AI" on the AI agent tab
+        self.freshness = freshness or Freshness()  # taken now: what this panel started with
 
     # -- what is true right now ----------------------------------------------------------------
     def state(self, since: int = 0) -> Dict[str, Any]:
         run = self.runner.snapshot(since)
         self._learn_check(run)
-        return {"os": self.host.as_dict(), "version": __version__, "setup": self.setup(), "run": run}
+        return {"os": self.host.as_dict(), "version": __version__, "stale": self.freshness.stale(), "setup": self.setup(), "run": run,
+                "agent": applications.live(self.paths)}
 
     def setup(self) -> Dict[str, Any]:
         profile, criteria = self._profile(), self._read(load_criteria, self.paths)
@@ -81,6 +87,7 @@ class Panel:
             "report_labels": {name: report_label(name) for name in reports},  # what to show on each button
             "report_sites": {name: PORTALS[site] for name in reports if (site := report_portal(name)) in PORTALS},
             "privacy": self.privacy_items(),
+            "dashboard": dashboard.summarize(queues, PORTALS),  # the Profile tab's picture of every job each site has been through
         }
 
     @staticmethod
@@ -93,21 +100,36 @@ class Panel:
     def _profile(self) -> Optional[Profile]:
         return self._read(load_profile, self.paths) if self.paths.profile.exists() else None
 
-    def _queue_counts(self) -> Dict[str, Dict[str, int]]:
-        """Each site's queue, read without disturbing a run that is writing to the same file."""
+    def _read_db(self, work: Callable[[sqlite3.Connection], Any], default: Any) -> Any:
+        """Read the jobs file without disturbing a run that is writing to it. `default` when there is no file or it cannot be read."""
         if not self.paths.db.exists():
-            return {}
+            return default
         try:
             connection = sqlite3.connect(f"{self.paths.db.as_uri()}?mode=ro", uri=True, timeout=2)
             try:
-                counts: Dict[str, Dict[str, int]] = {}
-                for portal, status, count in connection.execute("SELECT portal, status, COUNT(*) FROM jobs GROUP BY portal, status"):
-                    counts.setdefault(portal, {})[status] = count
-                return counts
+                return work(connection)
             finally:
                 connection.close()
         except sqlite3.Error:
-            return {}
+            return default
+
+    def _queue_counts(self) -> Dict[str, Dict[str, int]]:
+        """Each site's queue."""
+        return self._read_db(dashboard.counts, {})
+
+    def ask(self, body: Mapping[str, Any]) -> Dict[str, str]:
+        """A question about your job search, answered by the AI helper from your details and applications (see assistant.py)."""
+        return self.assistant.ask(body, profile=self._profile(), criteria=self._read(load_criteria, self.paths),
+                                  answers=self._read(load_answers, self.paths.answers) or {}, read_db=self._read_db)
+
+    def jobs(self, group: object, site: object) -> Dict[str, Any]:
+        """The jobs behind one number on the Profile tab's dashboard (`site` empty: all sites)."""
+        group, site = str(group or ""), str(site or "")
+        try:
+            dashboard.check(group, site, PORTALS)  # even with no jobs file yet, a wrong question gets a clear answer
+        except ValueError as exc:
+            raise ActionError(str(exc)) from None
+        return self._read_db(lambda connection: dashboard.listing(connection, group, site, PORTALS), dashboard.packed(group, site, 0, []))
 
     def _learn_check(self, run: Mapping[str, Any]) -> None:
         """After a "Check" run, remember what its own output said about the site it looked at."""
@@ -135,7 +157,7 @@ class Panel:
         command = self.command_for(action_id, options, str(raw.get("confirm") or ""), self.host, self.root)
         self._action, self._portal = action_id, options.portal
         label = describe(action_id, options)
-        self.runner.start(label, command, self._environment(), str(self.root), f"$ {display_command(command)}")
+        self.runner.start(label, command, self._environment(options if action_id == "agent" else None), str(self.root), f"$ {display_command(command)}")
         return {"started": label}
 
     def _require(self, action_id: str, options: Options) -> None:
@@ -143,18 +165,38 @@ class Panel:
             profile = self._profile()
             if not profile or not profile.resume_path:
                 raise ActionError("Set up your profile and resume first (the Profile and resume button).")
-        if action_id in NEEDS_BROWSER and self.browser_state() != READY:
+        opens_its_own_window = action_id == "agent" and bool(options.url) and not options.again  # a job page address brings a lost window back
+        if action_id in NEEDS_BROWSER and self.browser_state() != READY and not (opens_its_own_window and self.browser_state() == WINDOWLESS):
+            site = "the site" if action_id == "agent" else PORTALS[options.portal]  # the agent works on whatever site you have open
             raise ActionError("The browser has no window open. Press Open the browser (step 2) to bring one back."
                               if self.browser_state() == WINDOWLESS
-                              else f"Open the browser first (step 2) and log in to {PORTALS[options.portal]} in it.")
+                              else f"Open the browser first (step 2) and log in to {site} in it.")
+        if action_id == "agent" and options.again and not applications.unfinished(self.paths):
+            raise ActionError("There is no unfinished application to continue. Open a job page and start the agent instead.")
         ai = self._read(load_ai_settings, self.paths)
         if options.ai and not (ai and ai.configured):
             raise ActionError("The AI helper is not set up yet. Use the AI helper button, or turn the switch off.")
 
-    def _environment(self) -> Dict[str, str]:
+    def _environment(self, agent_options: Optional[Options] = None) -> Dict[str, str]:
         env = dict(os.environ)
         env.update(JOBAPPLY_HOME=str(self.paths.home), PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+        env.pop(AGENT_URL_ENV, None)  # whatever this was started with is not this run's job page
+        if agent_options is not None and agent_options.url and not agent_options.again:  # continuing carries on where it was
+            env[AGENT_URL_ENV] = agent_options.url
         return env
+
+    def agent_decide(self, body: Mapping[str, object]) -> Dict[str, bool]:
+        """Your answer to 'may I send this?'. Only counts for the application that asked."""
+        session, decision = body.get("session"), body.get("decision")
+        if not isinstance(session, str) or not isinstance(decision, str):
+            raise ActionError("That answer was not understood.")
+        return {"recorded": applications.decide(self.paths, session, decision)}
+
+    def agent_pause(self, body: Mapping[str, object]) -> Dict[str, bool]:
+        if not isinstance(body.get("paused"), bool):
+            raise ActionError("Say whether to pause or resume.")
+        applications.pause(self.paths, body["paused"])
+        return {"paused": body["paused"]}
 
     def stop(self) -> bool:
         return self.runner.stop()

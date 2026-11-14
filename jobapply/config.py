@@ -25,6 +25,7 @@ class Paths:
     profile = property(lambda self: self.home / "profile.yaml")
     criteria = property(lambda self: self.home / "criteria.yaml")
     answers = property(lambda self: self.home / "answers.yaml")
+    guesses = property(lambda self: self.home / "guessed_answers.yaml")  # answers the AI GUESSED, kept apart from the ones you gave
     aliases = property(lambda self: self.home / "answer_aliases.yaml")  # other wordings of a saved question -> that question
     db = property(lambda self: self.home / "jobs.db")
     reports = property(lambda self: self.home / "reports")
@@ -33,11 +34,14 @@ class Paths:
     ai = property(lambda self: self.home / "ai.yaml")  # which AI + its key: never shared
     about = property(lambda self: self.home / "about")  # extra documents about you (LinkedIn PDF, notes...)
     ai_log = property(lambda self: self.home / "ai_answers.jsonl")  # every answer the AI was asked for
+    ai_guess_log = property(lambda self: self.home / "ai_guesses.jsonl")  # every answer the AI was asked to guess
     ai_fit_log = property(lambda self: self.home / "ai_fit.jsonl")  # every job the AI judged from its description
     prompt_log = property(lambda self: self.home / "ai_prompts.jsonl")  # every pop-up the AI was asked about
     facts_log = property(lambda self: self.home / "ai_facts.jsonl")  # every time the AI was asked whether questions are the same fact
     resume_dir = property(lambda self: self.home / "resume")  # the copy of the resume that was uploaded
     run_log = property(lambda self: self.home / "run.log")
+    agent_dir = property(lambda self: self.home / "agent")  # the AI agent's sessions, live state, approvals and AI log
+    agent_ai_log = property(lambda self: self.home / "ai_agent.jsonl")  # every page the AI agent asked an AI about
 
     def ensure(self) -> None:
         for directory in (self.home, self.reports, self.failures):

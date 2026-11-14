@@ -32,7 +32,7 @@
   function notice(text, kind = "info") {
     const box = $("notice");
     box.textContent = text; box.dataset.kind = kind; box.hidden = !text;
-    if (text) announce(text);
+    if (text) { announce(text); document.dispatchEvent(new CustomEvent("panel:output")); }  // told in Output: it must be where it can be seen
   }
   function make(tag, className, text) {
     const element = document.createElement(tag);
@@ -40,6 +40,9 @@
     if (text !== undefined) element.textContent = text;
     return element;
   }
+
+  // What the other scripts on this page (the AI agent tab, the tabs) may use: no globals beyond this one.
+  const kit = window.PanelKit = Object.freeze({ $, api, post, notice, announce, make, refresh: () => refresh(), optionsFor: {}, state: { agentActive: false } });
 
   // -- which site the buttons work on: remembered in this browser ---------------------------
   const siteRadios = () => [...document.querySelectorAll('input[name="portal"]')];
@@ -83,7 +86,7 @@
   function nextStep(s) {
     const site = selectedSite(), check = ((s.sites || {})[site.id] || {}).check;
     if (!s.profile.saved) return [1, "Start with step 1: add your profile and resume."];
-    if (!s.browser.found) return [2, "No Chrome was found. Use Install Chrome under Tools, then open the browser."];
+    if (!s.browser.found) return [2, "No Chrome was found. Use Install Chrome (under Tools, on the Profile tab), then open the browser."];
     if (!s.browser.running) {
       return [2, s.browser.windowless ? "The browser is running but its window was closed. Press Open the browser (step 2) to bring one back."
         : `Next: open the browser (step 2) and log in to ${site.label} in it.`];
@@ -125,9 +128,11 @@
 
   // Questions a run is waiting on: the button says how many and glows (see .btn[data-waiting]), because it kept being missed.
   function renderQuestionsButton(s) {
-    const waiting = s.questions || 0, link = $("questions-link");
-    link.textContent = waiting ? `Questions (${waiting} waiting)` : "Questions";
-    link.toggleAttribute("data-waiting", waiting > 0);
+    const waiting = s.questions || 0;
+    for (const link of document.querySelectorAll("[data-questions-link]")) {  // step 1 and the Profile tab show the same link
+      link.textContent = waiting ? `Questions (${waiting} waiting)` : "Questions";
+      link.toggleAttribute("data-waiting", waiting > 0);
+    }
   }
 
   // The jobs a run could look at again: the ones it turned away itself (not the ones you already applied to).
@@ -264,12 +269,15 @@
     }
     $("os-chip").textContent = data.os.label;
     app.os = data.os; app.setup = data.setup;
+    $("stale-banner").hidden = !data.stale;  // started before an update: only a restart brings the new code
     $("open-data").textContent = `Show the data folder in ${data.os.file_manager}`;
     $("open-reports").textContent = `Show the reports folder in ${data.os.file_manager}`;
     appendLines(data.run.lines, data.run.dropped);
     app.since = data.run.next;
     renderRun(data.run);
     renderSetup(data.setup);
+    kit.state.last = data;  // for a script that starts listening after this first look
+    document.dispatchEvent(new CustomEvent("panel:state", { detail: data }));  // the AI agent tab draws its own part
     app.failures = 0;
   }
 
@@ -281,7 +289,7 @@
       app.failures += 1;
       if (app.failures >= 3) { notice("The panel has stopped. You can close this tab.", "error"); return; }
     }
-    setTimeout(tick, app.runState === "running" || app.runState === "stopping" ? POLL_BUSY_MS : POLL_IDLE_MS);
+    setTimeout(tick, app.runState === "running" || app.runState === "stopping" || kit.state.agentActive ? POLL_BUSY_MS : POLL_IDLE_MS);
   }
 
   // -- the buttons -------------------------------------------------------------------------
@@ -290,6 +298,7 @@
     try {
       await post("/api/run", { action, ...options });
       await refresh();
+      document.dispatchEvent(new CustomEvent("panel:output"));  // a tab with no Output (Profile) hands over to one that has it
       $("console").scrollIntoView({ behavior: "smooth", block: "nearest" });
       return true;
     } catch (error) {
@@ -298,11 +307,12 @@
     }
   }
 
-  function optionsFor(action) {
+  function optionsFor(action, button) {
     const portal = selectedSite().id;
+    if (kit.optionsFor[action]) return kit.optionsFor[action](button);  // the AI agent tab says what its own buttons send
     if (action === "rehearse") {
       return { portal, minutes: $("rehearse-minutes").value, ai: $("rehearse-ai").checked, recheck: $("rehearse-recheck").checked,
-        suggested: $("rehearse-suggested").checked };
+        suggested: $("rehearse-suggested").checked, agent: $("rehearse-agent").checked };
     }
     return action === "check" ? { portal } : {};
   }
@@ -370,7 +380,8 @@
     }
     const started = await start("apply", {
       portal: selectedSite().id, count: $("apply-count").value, minutes: $("apply-minutes").value, ai: $("apply-ai").checked,
-      recheck: $("apply-recheck").checked, suggested: $("apply-suggested").checked, confirm: "YES",
+      recheck: $("apply-recheck").checked, suggested: $("apply-suggested").checked, agent: $("apply-agent").checked,
+      approval: $("apply-approval").checked, confirm: "YES",
     });
     if (started) $("apply-dialog").close();
     else { error.textContent = $("notice").textContent || "That did not start."; error.hidden = false; }
@@ -451,7 +462,7 @@
 
   function fallingParts() {  // the visible components, from the top of the window down
     const top = (part) => part.getBoundingClientRect();
-    return [...document.querySelectorAll("body > header, .left > section, .left > fieldset, .grid > article, .right > section")]
+    return [...document.querySelectorAll("body > header, .tabpanel > section, .tabpanel > fieldset, .grid > article, .right > section")]
       .filter((part) => part.getClientRects().length)
       .sort((a, b) => top(a).top - top(b).top || top(a).left - top(b).left);
   }
@@ -500,7 +511,7 @@
     if (app.armed && target !== app.armed.button) disarmDelete();  // pressing anything else cancels a "Sure?"
     if (!target) return;
     if (target.dataset.deleteReport) deleteReport(target);
-    else if (target.dataset.action) start(target.dataset.action, optionsFor(target.dataset.action));
+    else if (target.dataset.action) start(target.dataset.action, optionsFor(target.dataset.action, target));
     else if (target.dataset.report) showReport(target.dataset.report);
     else if (target.dataset.open) post("/api/open", { target: target.dataset.open }).catch((e) => notice(e.message, "error"));
   });
@@ -508,6 +519,7 @@
   $("apply-open").addEventListener("click", openApplyDialog);
   $("apply-cancel").addEventListener("click", () => $("apply-dialog").close());
   $("apply-form").addEventListener("submit", submitApply);
+  $("apply-agent").addEventListener("change", () => { $("apply-approval").disabled = !$("apply-agent").checked; });  // nothing to approve without the agent
   $("stop").addEventListener("click", () => post("/api/stop").then(refresh).catch((e) => notice(e.message, "error")));
   $("quit").addEventListener("click", quit);
   $("erase-list").addEventListener("change", updateEraseButtons);
