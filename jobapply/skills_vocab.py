@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Set
+from typing import List, Set, Tuple
 
 # Ambiguous English words ("go", "c", "r", "rest") are deliberately left out.
 VOCAB = sorted(
@@ -53,6 +53,11 @@ def _canonical(term: str) -> str:
     return ALIASES.get(term, term)
 
 
+def mentions(text: str) -> List[Tuple[int, str]]:
+    """(where, canonical skill) of every mention in text, in the order they appear."""
+    return [(m.start(1), _canonical(m.group(1))) for m in _PATTERN.finditer(text or "")]
+
+
 def detect_skills(text: str) -> Set[str]:
     """Canonical skills mentioned in text."""
-    return {_canonical(m.group(1)) for m in _PATTERN.finditer(text or "")}
+    return {skill for _, skill in mentions(text)}

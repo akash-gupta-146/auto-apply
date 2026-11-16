@@ -22,6 +22,7 @@ CONFIRM_WORD = "YES"
 MAX_COUNT, MAX_MINUTES = 500, 720
 DEFAULT_REHEARSAL_MINUTES = 10
 DEFAULT_AGENT_MINUTES = 30
+DEFAULT_AUTO_MINUTES = 120  # the longest an Auto-apply run goes on; the number of applications usually ends it first
 AGENT_HANDOFF = ("rehearse", "apply")  # the portal runs that can hand a company-site job to the agent
 PORTALS = {"naukri": "Naukri", "instahyre": "Instahyre", "linkedin": "LinkedIn", "indeed": "Indeed", "wellfound": "Wellfound"}  # the sites the panel can work on, in the order shown
 DEFAULT_PORTAL = "naukri"
@@ -59,6 +60,7 @@ class Options:
     approval: bool = True  # the agent waits for your approval before it sends; False lets it send without asking (--no-approval)
     guess: bool = True  # the agent may guess a question nothing else can answer, and says so (False: --no-guess)
     url: str = ""  # the agent's job page address, opened in its browser: for a job found in some other browser, or in no browser yet
+    review: bool = True  # Auto-apply shows you each job and applies only after you say so (--review); False sends by itself
 
     def __post_init__(self):  # whoever builds an Options, a site that is not on the list can never become part of a command
         if not isinstance(self.portal, str) or self.portal not in PORTALS:
@@ -73,6 +75,7 @@ ACTIONS: Dict[str, Action] = {
         Action("check", "Check the site"),
         Action("rehearse", "Rehearsal (nothing is sent)", uses_ai=True),
         Action("apply", "Apply for real", real_apply=True, uses_ai=True),
+        Action("auto", "Auto-apply", uses_ai=True),  # real applications too, but it asks for the confirmation word only when it will not ask you first
         Action("agent", "AI agent on the open page", uses_ai=True),
         Action("repair", "Repair the install"),
         Action("install_browser", "Install Chrome"),
@@ -127,6 +130,7 @@ def parse_options(raw: Mapping[str, object]) -> Options:
         approval=_switch(raw, "approval", "The wait-for-approval switch", default=True),
         guess=_switch(raw, "guess", "The guess switch", default=True),
         url=_address(raw),
+        review=_switch(raw, "review", "The ask-me-first switch", default=True),
     )
 
 
@@ -141,6 +145,7 @@ def describe(action_id: str, options: Options) -> str:
         "check": f"Check {site}",
         "rehearse": f"Rehearsal on {site} (nothing is sent)",
         "apply": f"Apply for real on {site}",
+        "auto": f"Auto-apply on {site} (asks you before each one)" if options.review else f"Auto-apply on {site} (sends by itself)",
         "agent": f"AI agent on {where_agent_works(options)} (it may send, after you approve)" if options.send
         else f"AI agent on {where_agent_works(options)} (nothing is sent)",
     }.get(action_id, ACTIONS[action_id].label)
@@ -176,6 +181,13 @@ def build_command(
         if options.count is None or options.minutes is None:
             raise ActionError("Say how many applications and how many minutes, at most.")
         return program + ["run", options.portal, "--minutes", str(options.minutes), "--attempts", str(options.count)] + ai + switches + (unattended + no_guess if options.agent else [])
+    if action_id == "auto":
+        if options.count is None:
+            raise ActionError("Say how many applications, at most.")
+        if not options.review and confirm != CONFIRM_WORD:
+            raise ActionError(f"Type {CONFIRM_WORD} to confirm: this sends real applications without asking you first.")
+        return program + ["run", options.portal, "--minutes", str(options.minutes or DEFAULT_AUTO_MINUTES), "--attempts", str(options.count)] + ai \
+            + (["--review"] if options.review else [])
     if action_id == "rehearse":
         minutes = options.minutes or DEFAULT_REHEARSAL_MINUTES
         return program + ["run", options.portal, "--dry-run", "--minutes", str(minutes)] + ai + switches

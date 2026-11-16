@@ -12,10 +12,10 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from ..config import Paths
-from . import panel_page
+from . import panel_page, tracker
 from .actions import ActionError
 from .app import UiApp
 from .forms import ADD_SKILL, AI_FILL, MAX_UPLOAD_BYTES, parse_multipart
@@ -53,19 +53,26 @@ def questions_banner(query: Dict[str, List[str]]) -> Tuple[str, str]:
     return ("", "")
 ENVELOPE_BYTES = 64 * 1024  # room for form fields around an upload
 MAX_JSON_BYTES = 8 * 1024
-BODY_LIMITS = {"/api/ask": 64 * 1024}  # a question and the talk so far, in any script, is longer than a button press
+RESUME_BODY = 512 * 1024  # a whole resume at its largest, with a job description beside it
+RESUME_POSTS = {"/api/resume/new": "create", "/api/resume/save": "save", "/api/resume/duplicate": "duplicate", "/api/resume/delete": "delete",
+                "/api/resume/check": "check", "/api/resume/skill": "add_skill", "/api/resume/suggest": "suggest", "/api/resume/use": "use"}  # route -> ResumeTab method
+BODY_LIMITS = {"/api/ask": 64 * 1024, **{route: RESUME_BODY for route in RESUME_POSTS}}  # a question, or a resume, is longer than a button press
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
 JS = "text/javascript; charset=utf-8"
-STATIC_TYPES = {"theme.css": "text/css; charset=utf-8", "panel.js": JS, "agent.js": JS, "dashboard.js": JS, "ask.js": JS, "tabs.js": JS}
+STATIC_TYPES = {"theme.css": "text/css; charset=utf-8", "panel.js": JS, "agent.js": JS, "dashboard.js": JS, "ask.js": JS, "tabs.js": JS, "auto.js": JS, "jobtable.js": JS,
+                "resume.js": JS, "resume-form.js": JS, "resume-ai.js": JS, "resume-check.js": JS}
+FILTERS = ("group", "text", "days")  # what the tracker can be narrowed by, in the order Panel.auto_history takes them
 TOKEN_HEADER = "X-Token"
 SECURITY_HEADERS = {
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
-    "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+    "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-src 'self'; "
                                "form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
 }
+# The resume preview is a page of its own, shown inside the panel. It has no script, loads nothing, and may be framed only by the panel.
+PREVIEW_POLICY = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
 
 
 def make_handler(app: UiApp, panel: Panel):
@@ -77,13 +84,15 @@ def make_handler(app: UiApp, panel: Panel):
 
         # -- answering -----------------------------------------------------------------------
         def _finish(self, status: int, data: bytes = b"", content_type: str = "text/html; charset=utf-8",
-                    location: str = "") -> None:
+                    location: str = "", filename: str = "", policy: str = "") -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
             if location:
                 self.send_header("Location", location)
-            for key, value in SECURITY_HEADERS.items():
+            if filename:  # a name made by this program (never one a request said), and made safe to put in a header
+                self.send_header("Content-Disposition", disposition(filename))
+            for key, value in {**SECURITY_HEADERS, **({"Content-Security-Policy": policy} if policy else {})}.items():
                 self.send_header(key, value)
             self.end_headers()
             self.wfile.write(data)
@@ -136,6 +145,15 @@ def make_handler(app: UiApp, panel: Panel):
                 return self._static(route[len("/static/"):])
             if route == "/":
                 return self._html(panel_page.render(app.token))
+            if route == "/export/applications.csv":  # read-only like the pages above: asked for the same way, by a link
+                query = parse_qs(parsed.query)
+                try:
+                    data = panel.export_csv(*(query.get(key, [""])[0] for key in FILTERS))
+                except ActionError as exc:
+                    return self._text(400, str(exc))
+                return self._finish(200, data.encode("utf-8"), "text/csv; charset=utf-8", filename=tracker.FILENAME)
+            if route in ("/resume/preview", "/resume/export.pdf"):
+                return self._resume_page(route, parse_qs(parsed.query))
             if route == "/profile":
                 return self._html(app.upload_html())
             if route == "/form":
@@ -157,6 +175,17 @@ def make_handler(app: UiApp, panel: Panel):
             if route == "/answers/health":
                 return self._html(app.health_html(banner_for(parse_qs(parsed.query))))
             self._text(404, "Not found")
+
+        def _resume_page(self, route: str, query: Dict[str, List[str]]) -> None:
+            """The resume as a page (what the preview shows), or as the PDF printed from that same page. Read-only, like the pages above."""
+            wanted = [query.get(key, [""])[0] for key in ("id", "template")]
+            try:
+                if route == "/resume/preview":
+                    return self._finish(200, panel.resumes.preview(*wanted).encode("utf-8"), policy=PREVIEW_POLICY)
+                data, name, _ = panel.resumes.export(*wanted)
+            except ActionError as exc:
+                return self._text(400, str(exc))
+            self._finish(200, data, "application/pdf", filename=name)
 
         def _static(self, name: str) -> None:
             content_type = STATIC_TYPES.get(name)  # only these names: nothing typed is ever joined to a path
@@ -332,6 +361,8 @@ def make_handler(app: UiApp, panel: Panel):
             if not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json(415, {"error": "Send JSON."})
             raw = self._read_body(BODY_LIMITS.get(route, MAX_JSON_BYTES))
+            if raw is None:  # a length that is not a number, or more than this route ever takes: refused, not run as if nothing had been sent
+                return self._json(400, {"error": "That request was too large."})
             try:
                 body = json.loads(raw) if raw else {}
             except ValueError:
@@ -344,6 +375,12 @@ def make_handler(app: UiApp, panel: Panel):
             if not self._api_allowed():
                 return self._json(403, {"error": "Forbidden"})
             try:
+                if method == "POST" and route in RESUME_POSTS:
+                    return self._json(200, getattr(panel.resumes, RESUME_POSTS[route])(body))
+                if (method, route) == ("GET", "/api/resume/list"):
+                    return self._json(200, panel.resumes.overview())
+                if (method, route) == ("GET", "/api/resume/get"):
+                    return self._json(200, panel.resumes.get(query.get("id", [""])[0]))
                 if (method, route) == ("GET", "/api/state"):
                     return self._json(200, panel.state(_whole(query.get("since", ["0"])[0])))
                 if (method, route) == ("GET", "/api/report"):
@@ -360,6 +397,14 @@ def make_handler(app: UiApp, panel: Panel):
                     return self._json(200, panel.ask(body))
                 if (method, route) == ("POST", "/api/agent/decide"):
                     return self._json(200, panel.agent_decide(body))
+                if (method, route) == ("POST", "/api/auto/decide"):
+                    return self._json(200, panel.auto_decide(body))
+                if (method, route) == ("POST", "/api/auto/limit"):
+                    return self._json(200, panel.auto_limit(body))
+                if (method, route) == ("POST", "/api/auto/pause"):
+                    return self._json(200, panel.auto_pause(body))
+                if (method, route) == ("GET", "/api/auto/history"):
+                    return self._json(200, panel.auto_history(*(query.get(key, [""])[0] for key in FILTERS)))
                 if (method, route) == ("POST", "/api/agent/pause"):
                     return self._json(200, panel.agent_pause(body))
                 if (method, route) == ("POST", "/api/stop"):
@@ -381,6 +426,14 @@ def make_handler(app: UiApp, panel: Panel):
             threading.Thread(target=self.server.shutdown, daemon=True).start()  # not from this thread: it would wait for itself
 
     return Handler
+
+
+def disposition(filename: str) -> str:
+    """A download header for a file name that may hold any script (Hindi, Tamil...): the plain letters as a fallback, the real name for browsers that read it."""
+    fallback = "".join(char if char.isascii() and (char.isalnum() or char in "._-") else "_" for char in filename)
+    if fallback == filename:
+        return f'attachment; filename="{filename}"'
+    return f"attachment; filename=\"{'_'.join(part for part in fallback.split('_') if part)}\"; filename*=UTF-8''{quote(filename, safe='')}"
 
 
 def _whole(text: str) -> int:

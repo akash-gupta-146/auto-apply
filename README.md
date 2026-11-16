@@ -9,6 +9,9 @@ and the same panel works on Windows and on a Mac.
 
 You do not need an AI account, an API key or any coding to use it.
 
+**New here? Read the [user guide](USER-GUIDE.md):** a walk-through of every tab and page, a 15-minute quick start, and recipes for
+common jobs. This README is the reference behind it.
+
 ## Read this first: what is proven and what is not
 
 | | Status |
@@ -18,7 +21,7 @@ You do not need an AI account, an API key or any coding to use it.
 | The control panel | **Tested on a Mac, in a real browser:** the page, the buttons, live output, the confirmation, and a rehearsal that was stopped part-way (the program wrote its report). |
 | **Windows** (`Start.bat`, `setup.ps1`, and the panel's Windows parts: opening File Explorer, `winget`, the Stop button) | **Checked as far as a Mac allows. Never run on a Windows PC.** `setup.ps1` is parsed and *run for real under PowerShell* (on a Mac, with a pretend Windows around it) for a normal install, a failed install, no internet (including pasting a mirror address), no Python and a broken Python; this found and fixed a real bug (a failed install used to print "[ok]"). The panel's Windows-specific commands, the browser search, line endings and file names are covered by tests that pretend to be Windows. **Not checked:** `Start.bat` itself (`cmd.exe` cannot run on a Mac: it is 21 short lines, read by eye), BrowserOS neo's install location on Windows (a best guess; Chrome and Edge are found by their standard paths), and a real run of the panel and a browser on Windows. Tell me what breaks. |
 | The AI helper | Built and tested with **simulated AI replies only**. It has never talked to the real Claude, ChatGPT, Gemini, OpenRouter or Ollama, and has never answered a real Naukri question. |
-| **Instahyre** (in the panel: choose it under *Which site?*) | **Experimental.** Checked against a real account: the login check, and recognising Instahyre's profile-setup screen (the program stops and tells you, instead of finding nothing). Also checked live: reading the opportunity cards (each is headed "Company - Role"), opening a job's details (a pop-up with the full description and the Apply button) and finding Apply there; the program only ever presses the button whose text is exactly "Apply", never the "Not interested" beside it. **Not checked yet:** what Instahyre does after a real Apply press. Instahyre shows 30 of your opportunities per page, and the program does not yet page on to the rest. Rehearse first, then apply for real with **1**. |
+| **Instahyre** (in the panel: choose it under *Which site?*) | **Experimental.** Checked against a real account: the login check, and recognising Instahyre's profile-setup screen (the program stops and tells you, instead of finding nothing). Also checked live: reading the opportunity cards (each is headed "Company - Role"), opening a job's details (a pop-up with the full description and the Apply button) and finding Apply there; the program only ever presses the button whose text is exactly "Apply", never the "Not interested" beside it. **After Apply:** Instahyre shows no confirmation of its own, so the program counts an Apply press that raised no error as sent (the report says so in its reason); check Instahyre's own list if you want to be sure. Instahyre shows 30 of your opportunities per page, and the program does not yet page on to the rest. Rehearse first, then apply for real with **1**. |
 | **Wellfound** (in the panel: choose it under *Which site?*) | Written but **never tested on the live site**: its page layout has not been checked. Treat as experimental: rehearse first, then apply for real with 1. |
 | **Indeed** (in the panel: choose it under *Which site?*) | **Experimental.** Indeed forbids automation and its Cloudflare checks often ask for a human (the program waits 5 minutes, then skips that job). It only fills in **Indeed's own application form**: a job whose Apply button leads to a company's website is skipped, and the program never types into a page that is not on indeed.com. Works with or without the AI helper (see *Indeed, with and without the AI helper*). Checked live, read-only: the login check, reading search results and a job page, and skipping a hidden decoy card that real visitors never see. **Not yet seen live: Indeed's own application form** (every job looked at said "Apply on company site"), so that part is checked only against pages built to look like Indeed's: rehearse first. |
 | **LinkedIn** (in the panel: choose it under *Which site?*) | **Experimental, and the riskiest site to automate.** LinkedIn forbids automation and can restrict accounts that use it; this is your professional account, so decide for yourself. Only **Easy Apply** jobs are touched: the search always asks for Easy Apply, the program checks that filter really is switched on before it reads anything, and a job is skipped unless its own card and page say Easy Apply. It waits **45 to 120 seconds** between jobs, never presses *Follow company*, and leaves no half-finished application behind. Checked against a real account: the login check, the Easy Apply filter, reading job cards and their ids, and a **rehearsal all the way to the Submit button** (contact, resume, screening questions answered from your profile, Review, then stop and discard; it also unticks LinkedIn's pre-ticked *Follow company* box). **Not checked:** pressing *Submit application*, the "Application sent" message, other question types (dropdowns, long text), and any real application. Rehearse first, then apply for real with **1**. |
@@ -93,8 +96,9 @@ its own login check and its own job counts. The five steps:
 | **4. Rehearse** | Walks through jobs and fills forms but **never submits**. Safe to run as often as you like. Run it first, and again whenever you change your rules. |
 | **5. Apply for real** | Sends real applications on the chosen site. It asks how many and for how long (start with **3**, or **1** on Instahyre, LinkedIn and Indeed), and you must type **YES** to start. |
 
-The header has three tabs. **Apply on a site** holds everything above, with the *Reports*; the **Output** is beside every tab. **AI agent**
-holds the any-site agent (see below). **Profile** holds:
+The header has five tabs. **Apply on a site** holds everything above, with the *Reports*; the **Output** is beside the first three.
+**Auto-apply v2** works through jobs for you and asks you first (see below). **Auto fill form** holds the any-site AI agent (see below). **Create Resume** builds and checks a resume (see below).
+**Profile** holds:
 
 - **Your applications at a glance**, a dashboard of every job each site has been through: a ring of all jobs, five tiles
   (**Submitted**, **Rehearsed**, **Skipped**, **Errors**, **Waiting**) and one bar per site, as long as that site is busy next to
@@ -134,7 +138,8 @@ while a run is going. The choices, and exactly what each one removes (all inside
 |---|---|
 | Your details and job preferences | `profile.yaml`, `criteria.yaml`, `answers.yaml` |
 | Your resume and extra documents | `resume/` and `about/`. Your profile stays but forgets its resume |
-| AI helper key and its logs | `ai.yaml`, `ai_answers.jsonl`, `ai_fit.jsonl` (this turns the AI helper off) |
+| Resumes you built in the Create Resume tab | `resumes/`, every resume you wrote or imported there (the resume your runs send stays in *Your resume* above) |
+| AI helper key and its logs | `ai.yaml`, `ai_answers.jsonl`, `ai_fit.jsonl`, `ai_resume.jsonl` and the other AI logs (this turns the AI helper off) |
 | Your saved site logins (Naukri, Instahyre, LinkedIn, Indeed) | `browser-profile/`, which holds the logins for every site. Quit the automation browser completely first (closing its window is not enough); you will log in again next time |
 | Jobs seen, applications and reports | `jobs.db` and `reports/` |
 | Logs and screenshots of problems | `run.log` and `failures/`, and the output shown in the panel |
@@ -300,6 +305,51 @@ never uploads or invents one). A tick box nobody asked for, such as "send me job
 often a captcha, so the job is skipped (`skipped_external`) and you can apply to it yourself. It also never types into any
 page that is not on indeed.com, even if Indeed sends it there half way through.
 
+## Auto-apply: let it work through jobs, asking you first
+
+The **Auto-apply v2** tab is the easy way to use steps 1 to 5 together. It does the same run as *Apply for real*, but it **shows you each job before
+anything is sent**, and you press **Apply to it** or **Skip it**.
+
+1. **Is everything ready?** The top of the tab checks your profile and resume, your roles, the browser and the login, and says *Ready*,
+   *To do* or *Optional* for each, with a button to the place that fixes it.
+2. Choose the site and how many jobs at most, then press **Start auto-apply**.
+3. **Now:** the job it is about to apply to appears (title, company, where, what it asks for, and *why it fits*). Apply sends it; Skip moves on,
+   and the job is remembered as turned away. The tab shows a badge (*your turn*) when you are on another tab. If nobody answers **two jobs in a row**,
+   the run stops and nothing more is sent. **Pause** holds the run between two applications; **Stop** ends it.
+4. **What happened:** every job a run acted on, newest first. Narrow it by outcome, by when, or by company or job words, and
+   **Download as a spreadsheet (CSV)** gives exactly what those choices show, all of it (the table shows the newest 200).
+
+**Apply by itself** skips the asking (you type `YES` first). The AI helper switch works as everywhere else: answers only from your own documents.
+
+**The daily limit.** A live run, from any tab or from `jobapply run`, stops when **25 applications** have been sent that day on that site
+(the count is from every run, by your computer's clock). Raise it under *Daily limit* on the tab, or `daily_cap` in `criteria.yaml` (`0` is no limit).
+A rehearsal sends nothing, so it has no limit. This is a safety, and it is new: before it, a run could send as many as you allowed.
+
+From a terminal the same run is `jobapply run naukri --attempts 5 --review`; `--review` cannot be combined with `--dry-run`.
+
+Some sites forbid automated applications and can restrict an account that uses them. This never solves a captcha or a check: it stops and waits for you.
+
+## The Create Resume tab: build, check and use a resume
+
+The **Create Resume** tab makes a resume you can send, and tells you how a computer will read it. Everything stays on your computer.
+
+- **Start.** *Blank*, *From my profile* (your name, contact details and skills), or *From my uploaded resume* (the one your runs send now). A resume
+  read from a file is a **draft**: the tab lists what to check, and anything it could not read (a month, say) is left empty, never guessed.
+- **Write.** The text boxes are on the left and the page it prints is on the right, shown whole and shrunk to fit. It saves a moment after you stop
+  typing. Choose a template, font, size, accent colour, spacing and paper (A4 or Letter), and show, hide and reorder the sections. The plain one-column
+  templates are the safest for applicant tracking systems; the two-column one says it is *less safe for applications* right in its name.
+- **Check it.** One score out of 100, with the reason for every point lost, how to fix it, and **Go to it**, which puts the cursor in the right box.
+  Paste a job description to see which of the skills it asks for your resume does not mention. **I have this** adds a skill to your Skills, and only
+  when you press it, for a skill that is true of you. A skill the job only *prefers* costs nothing. **Save a copy for this job** keeps one resume per job.
+- **AI suggestions (optional).** *Improve with AI* on a bullet and *Suggest a summary with AI* use the AI helper you already set up and count against its daily limit.
+  A suggestion is shown as the difference from what you wrote, and nothing changes until you press **Use this**. A suggestion that adds a number, a tool or a
+  name that is not in your resume is thrown away before you see it. Emails, phone numbers and employers' names are not sent. A blank like `[X%]` is for you to
+  fill in with the real figure, and the check reminds you until you have.
+- **Download as a PDF** gives the file you can send anywhere. **Use this resume for my applications** needs a tick first. It prints the PDF, checks it can be
+  read back, then replaces the resume your runs send, and tells you which skills it added to your profile (with no years: you set those).
+
+Your resumes are the files in `data/resumes`. *Your personal information* on the Profile tab has a tick for them (*Resumes you built in the Create Resume tab*).
+
 ## The AI agent: any job site
 
 The other commands know a few sites. The agent knows none by name: it reads the page you have open (what the buttons and boxes
@@ -315,13 +365,13 @@ jobapply agent --continue        # carry on with an application that was left un
 jobapply agent --approve         # (from a second terminal) approve the application that is waiting to be sent
 ```
 
-**From the control panel:** the panel's header has three tabs, **Apply on a site**, **AI agent** and **Profile**. The AI agent tab does the same as the command, without a terminal. Open the job
+**From the control panel:** the panel's header has five tabs, **Apply on a site**, **Auto-apply v2**, **Auto fill form**, **Create Resume** and **Profile**. The Auto fill form tab does the same as the command, without a terminal. Open the job
 in the browser from step 2, set the minutes, tick *Use the AI helper* if you want it, and press **Start the agent**. Leave
 *Let it send applications* off for a rehearsal. If you turn it on you must type `YES`, and the agent then stops before each
 application and shows you what it is about to send: it goes only when you press **Approve and send** in the card (or
 *Do not send*). The card also shows what the agent is doing, the questions it is waiting for you to answer, a **Pause** button,
 and a log; **Continue the unfinished application** picks up where it stopped, and **Stop** (in the Output box) ends it. When the
-agent needs you (an approval, or an answer) while you are on the other tab, the AI agent tab says so (*approval needed*,
+agent needs you (an approval, or an answer) while you are on the other tab, the Auto fill form tab says so (*approval needed*,
 *needs an answer*), and a screen reader is told once.
 
 **Not waiting for approval.** *Wait for my approval before each application is sent* is on by default. Turn it off (it only
@@ -365,7 +415,7 @@ LinkedIn) in a rehearsal, and that taught it these things, each now covered by a
 - A click whose page is slow to load is not pressed a second time, and no longer costs 30 seconds.
 - "Given Name(s)", "Legal first name" and "Family Name" are read as the parts of your name.
 - If the agent stops with an error, the **traceback is now in the run log** (it used to show only one line in the feed).
-- **Which page it works on.** Give it the job's address (the *Job page address* box on the AI agent tab, or `jobapply agent --url ...`) and
+- **Which page it works on.** Give it the job's address (the *Job page address* box on the Auto fill form tab, or `jobapply agent --url ...`) and
   it opens the page itself, whichever browser you found the job in, and even if its own browser has lost its last window (which used to
   make Start do nothing). Without an address it uses the job page already open in its browser: the tab that is about a job, not just the
   one in front, and never this control panel's own tab. The address travels in the environment, never on the command line.
@@ -430,7 +480,7 @@ and press Delete account" gets nowhere. Every request is limited per application
 
 ### Ask the AI about your applications
 
-On the **AI agent** tab, under *Output*, is **Ask the AI**: type a question (*How many jobs did I apply to here? Why were
+On the **Auto fill form** tab, under *Output*, is **Ask the AI**: type a question (*How many jobs did I apply to here? Why were
 jobs skipped? Which ones had errors? What should I do next?*) and press **Ask** (or Ctrl+Enter, Command+Enter on a Mac). It is
 about the site chosen on the *Apply* tab, and it needs the AI helper to be set up (the card says so, with a link, if it is not).
 
@@ -479,7 +529,7 @@ rules, nothing to press, already applied) and Skipped by a challenge. Reports wr
 "recorded as applied; no more detail was saved" for old applications, because nothing more was kept.
 
 - **applied**: sent, and Naukri itself shows the job as applied afterwards (the program reloads the job to check; it does
-  not trust a "success" message).
+  not trust a "success" message). **Instahyre is the exception:** it confirms nothing, so an Apply press that raised no error is recorded as applied, and its reason says so.
 - **dry_run_ok**: would have been applied (rehearsal only).
 - **skipped_match**: the title, skills, salary or location did not fit your rules.
 - **skipped_external**: needs you (screening questions, or it applies on the company's own site).
@@ -650,6 +700,7 @@ A job still waiting for your answer from an earlier run is tried after the fresh
 - If you set up the AI helper: your key is in `data/ai.yaml`, your extra documents are in `data/about`, and every question
   and answer is in `data/ai_answers.jsonl`. All stay on your computer. Never share them. Deleting `data/ai.yaml` turns the
   helper off.
+- The resumes you build are in `data/resumes`, and every suggestion the AI was asked for is noted in `data/ai_resume.jsonl` (what was decided, never your text; it goes with *AI helper key and its logs*). Never share them.
 - The program only talks to the job site you run it on (and, with the AI helper, to the AI company you chose, unless that
   is Ollama).
 - *Ask the AI* sends the AI company you chose your profile, saved answers, resume text and applications each time you ask,

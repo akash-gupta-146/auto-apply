@@ -38,8 +38,12 @@ class Paths:
     ai_fit_log = property(lambda self: self.home / "ai_fit.jsonl")  # every job the AI judged from its description
     prompt_log = property(lambda self: self.home / "ai_prompts.jsonl")  # every pop-up the AI was asked about
     facts_log = property(lambda self: self.home / "ai_facts.jsonl")  # every time the AI was asked whether questions are the same fact
+    ai_resume_log = property(lambda self: self.home / "ai_resume.jsonl")  # every resume suggestion the AI was asked for: what was decided, never what was sent
+    resumes = property(lambda self: self.home / "resumes")  # the resumes made in the panel's Create Resume tab, one JSON file each (see builder/doc.py)
     resume_dir = property(lambda self: self.home / "resume")  # the copy of the resume that was uploaded
     run_log = property(lambda self: self.home / "run.log")
+    pause = property(lambda self: self.home / "pause.json")  # present while you have paused the run (see review.py)
+    review = property(lambda self: self.home / "review.json")  # the job a run is asking you about before it applies (see review.py)
     agent_dir = property(lambda self: self.home / "agent")  # the AI agent's sessions, live state, approvals and AI log
     agent_ai_log = property(lambda self: self.home / "ai_agent.jsonl")  # every page the AI agent asked an AI about
 
@@ -90,6 +94,7 @@ class Criteria:
     max_years_above: Optional[float] = None  # skip a job whose lowest experience ask is more than this many years over yours
     min_fit: str = "Low"  # the lowest rating to apply to: Low (anything that passed), Medium (>=1 nice-to-have) or High (>=2)
     max_applications_per_run: int = 100
+    daily_cap: int = 25  # most applications sent in one day on one site, over all runs (0: no limit): a safety, raised only on purpose
     pacing_min_s: float = 20
     pacing_max_s: float = 90
     challenge_wait_s: float = 300  # human-in-the-loop window, then skip

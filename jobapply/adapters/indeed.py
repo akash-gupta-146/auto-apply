@@ -32,6 +32,7 @@ STEP_POLL_MS = 250
 CONFIRM_WAIT_MS = 10_000  # after Submit, how long Indeed gets to say the application was sent
 CONFIRM_POLL_MS = 500
 FORM_OPEN_MS = 15_000
+NO_ADDRESS_YET = ("", "about:blank")  # what a tab shows before the page it was opened for has an address
 FORM_READY_MS = 20_000  # a step is drawn by script after the page loads: how long it gets before it counts as empty
 
 SEL = {
@@ -192,9 +193,10 @@ class IndeedAdapter(Adapter):
 
     def _let_redirects_land(self, tab) -> None:
         """Apply goes through /applystart, which moves on to Indeed's own form or to the company's site.
-        Judge the address only once it has: an address that is about to change proves nothing."""
+        Judge the address only once it has: an address that is about to change proves nothing. A new tab can also report no address at all
+        for a moment after it has loaded (older Playwright, which is all Python 3.9 can have): that is not a form that leads nowhere."""
         for _ in range(STEP_WAIT_MS // STEP_POLL_MS):
-            if "/applystart" not in tab.url:
+            if tab.url not in NO_ADDRESS_YET and "/applystart" not in tab.url:
                 return
             tab.wait_for_timeout(STEP_POLL_MS)
 

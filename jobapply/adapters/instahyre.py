@@ -6,8 +6,10 @@ full description and the real "Apply" next to a second "Not interested".
 Cards have no URL, so we tag each card's DOM node with a stable id and use a pseudo-URL
 (`<query-url>#<id>`) as the queue key; read_job() reloads the query page that found it.
 
-Seen live (November 2026): the cards, their headers, the overlay and its Apply button. NOT yet seen: what the
-page does after a real Apply press (the code only checks that the button went away).
+Seen live (November 2026): the cards, their headers, the overlay and its Apply button. After a real Apply press
+Instahyre shows NO confirmation (its normal behaviour, told to us by the person using it), and the overlay or its Apply
+button may stay on screen. So there is nothing to wait for: a press that raised no error counts as sent. Playwright
+itself raises if the button cannot be pressed (hidden, covered, gone), and that is still a failure.
 """
 from __future__ import annotations
 
@@ -155,9 +157,8 @@ class InstahyreAdapter(Adapter):
             raise RuntimeError("Apply button not found in the job's details")
         if dry_run:
             return Result(Status.DRY_RUN_OK, "apply button present")
-        button.click()
+        button.click()  # raises if the button cannot really be pressed: that is a failure, not a success
         self.settle(1.5, 2.5)
         self.check_challenge()
-        if first_visible(modal, [SEL["apply"]]) is not None:  # still there: click did not register
-            raise RuntimeError("Apply click did not register")
-        return Result(Status.APPLIED, "Apply was pressed and its button went away (Instahyre shows no other confirmation)")
+        # Instahyre confirms nothing, and the button may well stay on screen: do not read that as "did not register".
+        return Result(Status.APPLIED, "Apply was pressed (Instahyre shows no confirmation of its own, so a press that raised no error counts as sent)")

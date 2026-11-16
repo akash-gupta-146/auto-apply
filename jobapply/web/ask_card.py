@@ -1,4 +1,4 @@
-"""The "Ask the AI" card, under Output on the AI agent tab: the markup only. ask.js fills in the conversation, always as text.
+"""The "Ask the AI" card, under Output on the Auto fill form tab: the markup only. ask.js fills in the conversation, always as text.
 
 What the AI is shown, and what it is told, is in assistant.py; the card says the same in words, because the person asking is
 the one whose details are sent.

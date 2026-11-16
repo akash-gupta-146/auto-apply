@@ -1,5 +1,5 @@
 "use strict";
-/* "Ask the AI", under Output on the AI agent tab. The conversation lives in this page only: reloading it starts afresh, and nothing
+/* "Ask the AI", under Output on the Auto fill form tab. The conversation lives in this page only: reloading it starts afresh, and nothing
    is saved anywhere. Everything the AI writes is shown as plain text (never as HTML), so an answer can neither run anything nor
    look like a link. The server decides what the AI is shown and tells us in words what was sent. */
 (() => {

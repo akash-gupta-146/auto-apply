@@ -35,6 +35,7 @@ from .models import (
     Result,
     Status,
 )
+from .review import APPROVE, REJECT
 from .system import announce
 
 log = logging.getLogger("jobapply")
@@ -48,6 +49,10 @@ MAX_REOPENS = 2  # fresh tabs opened for ONE job (you closed it again, or it kee
 # was tried, so none of the run's attempts was used.
 NOTHING_TRIED = (Status.SKIPPED_EXTERNAL, Status.SKIPPED_DUPLICATE)
 CLOSED_REASON = "closed: the listing is no longer accepting applications"
+REVIEW_SKIPPED = "you chose to skip it when asked"
+UNREVIEWED = "nobody answered in time: left for a later run"  # a job that was asked about and not decided stays as it was
+PAUSE_POLL_S = 2.0  # how often a paused run looks to see whether you have resumed it
+MAX_UNREVIEWED = 2  # jobs in a row nobody answered about, and the run stops: nobody is there, so nothing more may be sent
 
 
 @dataclass
@@ -107,6 +112,8 @@ class Engine:
         suggested: bool = False,
         external: Optional[Callable[[Job, float], Result]] = None,
         fit_judge: Optional[Callable[[Job, Decision], Decision]] = None,
+        review: Optional[Callable[[Job, str, float], str]] = None,
+        paused: Optional[Callable[[], bool]] = None,
         max_attempts: Optional[int] = None,
         answers_loader: Optional[Callable[[], Dict[str, str]]] = None,
         clock: Callable[[], float] = time.monotonic,
@@ -119,6 +126,9 @@ class Engine:
         self.minutes, self.dry_run = minutes, dry_run
         self.reevaluate, self.fit_judge = reevaluate, fit_judge
         self.external = external  # takes a job the portal cannot apply to itself (and the minutes the run has left): the AI agent
+        self.review = review  # shows you a job that passed the rules, with why, and waits for your answer: APPROVE, REJECT or TIMEOUT (review.py)
+        self.paused = paused  # True while you have paused the run: it waits between two applications (review.py)
+        self._unreviewed = 0  # jobs in a row that were asked about and nobody answered
         self.suggested = suggested  # apply to every job the site itself suggests, with no roles/skills/salary matching
         self._shown: Set[str] = set()  # the addresses of every job the site showed this run: all a suggested run may open
         self._attempted: Set[str] = set()  # the jobs this run has already been through, so a later batch never repeats one
@@ -381,6 +391,9 @@ class Engine:
         decision = self._judge(job)
         if not decision.ok:
             return Result(Status.SKIPPED_MATCH, decision.reason, decision.score)
+        held_back = self._reviewed(job, decision) if self.review is not None and not self.dry_run else None  # a rehearsal sends nothing to review
+        if held_back is not None:
+            return held_back
         if not self.dry_run:
             self._attempts += 1  # counted BEFORE the click: a failed or ambiguous attempt still used one
         try:
@@ -404,11 +417,31 @@ class Engine:
             self._give_back_attempt()  # nothing was pressed: a job that cannot be applied to must not use up the run's attempts
         result.score = decision.score
         if result.status in (Status.APPLIED, Status.DRY_RUN_OK):  # say why it was let through, so the report can be audited
-            why, rating = why_it_fits(job, self.profile, self.criteria, decision), fit_note(job, self.profile, self.criteria, decision)
-            result.reason = f"{why}{'; ' + rating if rating else ''}. {result.reason}".strip()
+            result.reason = f"{self._why(job, decision)}. {result.reason}".strip()
         elif decision.reason not in (MATCH, SUGGESTED):  # a looser fit than the roles asked for
             result.reason = f"[{decision.reason}] {result.reason}".strip()
         return result
+
+    def _why(self, job: Job, decision: Decision) -> str:
+        """Why a job was let through, in a sentence: shown to you before it is applied to, and written in the report after."""
+        why, rating = why_it_fits(job, self.profile, self.criteria, decision), fit_note(job, self.profile, self.criteria, decision)
+        return f"{why}{'; ' + rating if rating else ''}"
+
+    def _reviewed(self, job: Job, decision: Decision) -> Optional[Result]:
+        """Show you a job that passed the rules before anything is pressed. None: you said apply. A Result: you said skip, or nobody answered
+        (the job then stays as it was, and is not counted as a failure)."""
+        patience = self._patience()
+        if patience <= 0:  # the run is out of time: do not start asking
+            return Result(Status.NEW, UNREVIEWED, decision.score)
+        verdict = self.review(job, self._why(job, decision), patience)
+        if verdict == APPROVE:
+            self._unreviewed = 0
+            return None
+        if verdict == REJECT:
+            self._unreviewed = 0
+            return Result(Status.SKIPPED_MATCH, REVIEW_SKIPPED, decision.score)
+        self._unreviewed += 1
+        return Result(Status.NEW, UNREVIEWED, decision.score)
 
     def _judge(self, job: Job) -> Decision:
         if self.suggested:
@@ -431,18 +464,36 @@ class Engine:
     def _out_of_time(self) -> bool:
         return self.clock() >= self.deadline
 
+    def _hold_while_paused(self) -> None:
+        """You pressed Pause: wait here, between two applications, until you resume. The time budget keeps running, so a forgotten pause ends the run."""
+        while self.paused is not None and self.paused() and not self._out_of_time():
+            self.sleep(PAUSE_POLL_S)
+
     def _budget_exhausted(self) -> bool:
+        self._hold_while_paused()  # asked before every job, so this is the moment between two applications
         if self._out_of_time():
             self.summary.stop_reason = "time budget used up"
             if not self.summary.items:  # a short budget can be spent entirely on searching: say so, or it looks like a bug
                 self.summary.stop_reason += " before any job was read (the search itself used it all: allow more minutes)"
         elif self.summary.done >= self.criteria.max_applications_per_run:
             self.summary.stop_reason = "run cap reached"
+        elif self._daily_cap_reached():
+            self.summary.stop_reason = (f"daily limit reached ({self.criteria.daily_cap} sent today on {self.adapter.name}): "
+                                        f"it starts again tomorrow, or raise it on the panel's Auto-apply v2 tab")
         elif self.max_attempts is not None and self._attempts >= self.max_attempts:
             self.summary.stop_reason = f"attempt limit reached ({self.max_attempts})"
         return bool(self.summary.stop_reason)
 
+    def _daily_cap_reached(self) -> bool:
+        """Today's applications on this site, from every run, have used up the daily limit. A rehearsal sends nothing, so it has no limit."""
+        cap = self.criteria.daily_cap
+        return bool(cap > 0 and not self.dry_run and self.db.sent_today(self.adapter.name) >= cap)
+
     def _should_stop(self, result: Result) -> bool:
+        if self._unreviewed >= MAX_UNREVIEWED:
+            self.summary.stop_reason = (f"nobody answered {MAX_UNREVIEWED} jobs in a row, so nothing more was asked or sent: "
+                                        "start it again when you are at the screen")
+            return True
         if not result.blameless:  # a tab closed under a job says nothing about whether the site's selectors broke
             if result.status is Status.FAILED:
                 self._fail_streak += 1

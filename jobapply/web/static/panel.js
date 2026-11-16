@@ -41,7 +41,7 @@
     return element;
   }
 
-  // What the other scripts on this page (the AI agent tab, the tabs) may use: no globals beyond this one.
+  // What the other scripts on this page (the Auto fill form tab, the tabs) may use: no globals beyond this one.
   const kit = window.PanelKit = Object.freeze({ $, api, post, notice, announce, make, refresh: () => refresh(), optionsFor: {}, state: { agentActive: false } });
 
   // -- which site the buttons work on: remembered in this browser ---------------------------
@@ -277,7 +277,7 @@
     renderRun(data.run);
     renderSetup(data.setup);
     kit.state.last = data;  // for a script that starts listening after this first look
-    document.dispatchEvent(new CustomEvent("panel:state", { detail: data }));  // the AI agent tab draws its own part
+    document.dispatchEvent(new CustomEvent("panel:state", { detail: data }));  // the Auto fill form tab draws its own part
     app.failures = 0;
   }
 
@@ -309,7 +309,7 @@
 
   function optionsFor(action, button) {
     const portal = selectedSite().id;
-    if (kit.optionsFor[action]) return kit.optionsFor[action](button);  // the AI agent tab says what its own buttons send
+    if (kit.optionsFor[action]) return kit.optionsFor[action](button);  // the Auto fill form tab says what its own buttons send
     if (action === "rehearse") {
       return { portal, minutes: $("rehearse-minutes").value, ai: $("rehearse-ai").checked, recheck: $("rehearse-recheck").checked,
         suggested: $("rehearse-suggested").checked, agent: $("rehearse-agent").checked };

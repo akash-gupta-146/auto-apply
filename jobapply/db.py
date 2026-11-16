@@ -37,6 +37,13 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def sent_today_counts(conn: sqlite3.Connection) -> Dict[str, int]:
+    """{site: applications sent today, by this computer's clock}. Works on any connection, so the panel can read it without disturbing a run."""
+    rows = conn.execute("SELECT portal, COUNT(*) FROM jobs WHERE status = ? AND substr(updated_at, 1, 10) = ? GROUP BY portal",
+                        (Status.APPLIED.value, date.today().isoformat())).fetchall()
+    return {portal: number for portal, number in rows}
+
+
 class Database:
     def __init__(self, path):
         self.conn = sqlite3.connect(str(path) if isinstance(path, Path) else path)
@@ -97,6 +104,10 @@ class Database:
     def ready(self, portal: str) -> int:
         """How many jobs a triage found worth applying to and no run has tried yet."""
         return self.conn.execute("SELECT COUNT(*) FROM jobs WHERE portal = ? AND status = ? AND checked_at IS NOT NULL", (portal, Status.NEW.value)).fetchone()[0]
+
+    def sent_today(self, portal: str) -> int:
+        """Applications sent today on one site, whatever run sent them: what the daily limit counts."""
+        return sent_today_counts(self.conn).get(portal, 0)
 
     def counts(self, portal: Optional[str] = None) -> Dict[str, Dict[str, int]]:
         sql = "SELECT portal, status, COUNT(*) AS n FROM jobs"

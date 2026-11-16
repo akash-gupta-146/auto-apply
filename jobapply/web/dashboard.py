@@ -7,6 +7,7 @@ group each job status belongs to, so a status added later cannot quietly vanish 
 from __future__ import annotations
 
 import sqlite3
+from datetime import date, timedelta
 from typing import Any, Dict, List, Mapping, Tuple
 
 from ..models import Status
@@ -31,6 +32,8 @@ PLACED: Dict[str, Tuple[str, str]] = {  # job status -> (its group, what a list 
     Status.NEEDS_ANSWER.value: ("waiting", "Needs your answer"),
 }
 BY_STATUS: Dict[str, str] = {status: group for status, (group, _) in PLACED.items()}
+DAY_CHOICES = (0, 1, 7, 30)  # a list can be narrowed to: any time, today, the last week, the last month
+TEXT_LIMIT = 100  # the most characters of a search word that mean anything
 LIST_LIMIT = 200  # a list is for looking at: the newest jobs, with a note when there are more
 SAFE_LINKS = ("http://", "https://")  # a link in the list opens only a web page, whatever the database holds
 _MARKS = {group: ",".join("?" * sum(1 for g in BY_STATUS.values() if g == group)) for group in GROUPS}  # fixed: never built from a request
@@ -75,15 +78,49 @@ def packed(group: str, site: str, total: int, jobs: List[Dict[str, str]]) -> Dic
 
 def listing(connection: sqlite3.Connection, group: str, site: str, sites: Mapping[str, str]) -> Dict[str, Any]:
     """The jobs behind one number: the newest first. `group` and `site` have been through `check`; `site` \"\" means every site."""
-    statuses = [status for status, placed in BY_STATUS.items() if placed == group]
     where = f"status IN ({_MARKS[group]})" + (" AND portal = ?" if site else "")
-    arguments = [*statuses, *([site] if site else [])]
+    arguments = [*_statuses(group), *([site] if site else [])]
     total = connection.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", arguments).fetchone()[0]
     rows = connection.execute(
         f"SELECT portal, url, title, company, location, status, reason, updated_at FROM jobs WHERE {where}"
         " ORDER BY updated_at DESC, rowid DESC LIMIT ?", [*arguments, LIST_LIMIT]).fetchall()
-    jobs = [{"portal": portal, "site": sites.get(portal, portal), "title": title or "", "company": company or "", "location": location or "",
+    return packed(group, site, total, _jobs(rows, sites))
+
+
+def _jobs(rows: List[Tuple], sites: Mapping[str, str]) -> List[Dict[str, str]]:
+    """Rows of (portal, url, title, company, location, status, reason, updated_at) as what a list shows: text, and a link only to a web page."""
+    return [{"portal": portal, "site": sites.get(portal, portal), "title": title or "", "company": company or "", "location": location or "",
              "result": PLACED.get(status, ("", status))[1], "reason": reason or "", "when": when or "",
              "url": url if url and url.startswith(SAFE_LINKS) else ""}
             for portal, url, title, company, location, status, reason, when in rows]
-    return packed(group, site, total, jobs)
+
+
+def _statuses(group: str) -> List[str]:
+    return [status for status, placed in BY_STATUS.items() if placed == group]
+
+
+def check_filters(group: str, text: str, days: int) -> None:
+    if group and group not in GROUPS:
+        raise ValueError("That is not one of the outcomes.")
+    if days not in DAY_CHOICES:
+        raise ValueError("Choose any time, today, the last 7 days or the last 30 days.")
+    if len(text) > TEXT_LIMIT:
+        raise ValueError(f"Search for at most {TEXT_LIMIT} characters.")
+
+
+def tried(connection: sqlite3.Connection, sites: Mapping[str, str], limit: int = -1, group: str = "", text: str = "", days: int = 0) -> List[Dict[str, str]]:
+    """Every job a run has acted on (all but the ones not looked at yet), the newest first; `limit` -1 is all of them. Narrowed to one outcome
+    group, to jobs whose company or title holds `text`, and to the last `days` days (today is 1): all of it already through `check_filters`."""
+    where, arguments = ["status != ?"], [Status.NEW.value]
+    if group:
+        where.append(f"status IN ({_MARKS[group]})")
+        arguments += _statuses(group)
+    if text.strip():  # instr, not LIKE: what is typed is words to find, so a % or _ in it means nothing special
+        where.append("instr(lower(coalesce(company, '') || ' ' || coalesce(title, '')), ?) > 0")
+        arguments.append(text.strip().lower())
+    if days:
+        where.append("substr(updated_at, 1, 10) >= ?")
+        arguments.append((date.today() - timedelta(days=days - 1)).isoformat())
+    return _jobs(connection.execute(
+        f"SELECT portal, url, title, company, location, status, reason, updated_at FROM jobs WHERE {' AND '.join(where)}"
+        " ORDER BY updated_at DESC, rowid DESC LIMIT ?", [*arguments, limit]).fetchall(), sites)

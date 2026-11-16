@@ -130,7 +130,7 @@ button:disabled { color: var(--muted); box-shadow: none; cursor: not-allowed; }
 /* fields */
 label { display: block; font-weight: 650; margin: 16px 0 6px; }
 .field label { margin-top: 12px; }
-input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number], input[type=password], input[type=file], textarea, select {
+input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number], input[type=password], input[type=search], input[type=file], textarea, select {
   width: 100%; min-height: 46px; padding: 10px 14px; font: inherit; color: var(--text); background: var(--bg);
   border: 2px solid var(--line); border-radius: 12px; box-shadow: var(--inset-sm);
 }
@@ -302,14 +302,14 @@ html.gone body > :not(#goodbye):not(#announce) { display: none; }
 .dash-list { margin: 8px 0 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .dash-list-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 #dash-list .hint { margin: 6px 0 10px; }
-#dash-list th, #dash-list td { text-align: left; vertical-align: top; }
-#dash-list th, #dash-list td { overflow-wrap: normal; }  /* the page-wide "break anywhere" would let a column shrink until a word splits ("Compan-y") */
-#dash-list tbody th { overflow-wrap: anywhere; }  /* ...but a job's title may be one very long word, and it alone may break */
-#dash-list td.short { white-space: nowrap; }  /* a site's name and a time stay on one line: it is the job's title and company that wrap */
+#dash-list th, #dash-list td, #auto-table th, #auto-table td { text-align: left; vertical-align: top; }
+#dash-list th, #dash-list td, #auto-table th, #auto-table td { overflow-wrap: normal; }  /* the page-wide "break anywhere" would let a column shrink until a word splits ("Compan-y") */
+#dash-list tbody th, #auto-table tbody th { overflow-wrap: anywhere; }  /* ...but a job's title may be one very long word, and it alone may break */
+#dash-list td.short, #auto-table td.short { white-space: nowrap; }  /* a site's name and a time stay on one line: it is the job's title and company that wrap */
 .dash-sub { display: block; color: var(--muted); font-weight: 400; font-size: .86rem; }
 .dash-table summary { cursor: pointer; font-weight: 650; }
 .table-wrap { overflow-x: auto; margin-top: 12px; }
-.dash-table table, .dash-list table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.dash-table table, .dash-list table, #auto-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 #dash-list-wrap { max-height: 50vh; overflow-y: auto; }  /* half the screen at most: a long list scrolls inside itself, never down the page */
 #dash-list thead th { position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: 0 1px 0 var(--line); }  /* the headings stay while the rows scroll */
 .dash-list table { min-width: 34rem; }  /* on a narrow screen the list scrolls sideways inside itself: a squeezed title column would be a tower of one-word lines */
@@ -336,7 +336,7 @@ html.gone body > :not(#goodbye):not(#announce) { display: none; }
   .donut { margin: 0 auto; }
 }
 
-/* Ask the AI: under Output, on the AI agent tab only. The column sticks to the window, so while this card is there it gets the
+/* Ask the AI: under Output, on the Auto fill form tab only. The column sticks to the window, so while this card is there it gets the
    window's height and the two cards share it (a sticky column taller than the window cannot be scrolled to its end). */
 .layout[data-tab="tab-agent"] .right { height: calc(100vh - 40px); }
 .layout[data-tab="tab-agent"] .console-card { flex: 0 1 200px; min-height: 160px; max-height: none; }  /* what Output needs; the question box gets the rest */
@@ -372,5 +372,58 @@ html.gone body > :not(#goodbye):not(#announce) { display: none; }
 @media (max-height: 700px) and (min-width: 981px) {  /* a short window: Output gives a little more up, so the question box still fits */
   .layout[data-tab="tab-agent"] .console-card { flex-basis: 130px; min-height: 110px; }
 }
+/* The Auto-apply v2 tab. */
+.auto-ready { list-style: none; margin: 8px 0 18px; padding: 0; }
+.auto-ready li { margin: 10px 0; }
+.auto-sites { border: 0; padding: 0; margin: 14px 0 0; }
+#auto-table th, #auto-table td { padding: 8px 18px 8px 0; border-bottom: 1px solid var(--line); }
+#auto-table thead th { color: var(--muted); font-size: .85rem; font-weight: 700; }
+#panel-auto[data-busy] #auto-live { order: -1; }  /* a run is going, or a job waits for you: what needs you comes first, not below the form */
+.auto-meter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 12px 0; }
+.auto-meter progress { flex: 1 1 220px; height: 18px; accent-color: var(--accent); }
+.auto-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 16px; }
+.auto-cap summary { cursor: pointer; font-weight: 650; margin-top: 8px; }
+#auto-job-title { font-size: 1.15rem; }
+
 /* The Profile tab has no use for Output, so the column is gone there and everything gets the whole page. */
-.layout[data-tab="tab-profile"] { grid-template-columns: minmax(0, 1fr); }
+.layout[data-tab="tab-profile"], .layout[data-tab="tab-resume"] { grid-template-columns: minmax(0, 1fr); }
+
+/* The Create Resume tab: your resumes, the editor beside a preview of the real page, and the check. */
+.resume-cards { list-style: none; margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+.resume-card { padding: 16px 20px; border-radius: 18px; box-shadow: var(--inset-sm); }
+.resume-card h3 { margin: 0 0 4px; overflow-wrap: anywhere; }
+.resume-bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+.resume-bar { margin-bottom: 14px; }
+.resume-bar p { margin: 0; font-weight: 600; }
+.resume-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.resume-preview-col { min-width: 0; }
+.resume-preview-wrap { height: 78vh; min-height: 420px; overflow: hidden; border: 2px solid var(--line); border-radius: 14px; background: #e6e8ee; }
+#resume-preview { display: block; border: 0; transform-origin: top left; }  /* its width, height and scale are set by resume.js: the whole page, shrunk to fit */
+.resume-look { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 16px; }
+.resume-block { margin: 18px 0; }
+.resume-block > summary { cursor: pointer; font-weight: 650; padding: 4px 0; }
+.resume-entry { margin: 14px 0; padding: 4px 18px 16px; border-radius: 16px; box-shadow: var(--inset-sm); }
+.resume-entry h4 { margin: 14px 0 0; font-size: 1rem; overflow-wrap: anywhere; }
+.resume-bullets-title { margin: 18px 0 0; font-weight: 650; }
+.resume-bullet { margin: 8px 0 14px; }
+.resume-sections { list-style: none; margin: 8px 0; padding: 0; }
+.resume-section-row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 6px 0; }
+.resume-section-row .check { margin: 0; min-width: 190px; }
+.resume-ai { margin: 8px 0 14px; padding: 6px 16px 14px; border-radius: 14px; box-shadow: var(--inset-sm); }
+.resume-suggestion { margin: 12px 0; padding-bottom: 8px; border-bottom: 1px solid var(--lo); }
+.diff { line-height: 1.7; }
+.diff del { text-decoration: line-through; color: var(--danger); }
+.diff ins { text-decoration: underline; font-weight: 650; color: var(--ok); }
+#resume-score { font-size: 1.5rem; margin: 18px 0 8px; }
+.resume-cats, .resume-fixes { list-style: none; margin: 8px 0 16px; padding: 0; }
+.resume-cat { display: grid; grid-template-columns: minmax(0, 17em) minmax(0, 1fr); align-items: center; gap: 4px 16px; margin: 8px 0; }  /* a column for the words, so the bars all start in the same place */
+.resume-cat progress { width: 100%; height: 14px; accent-color: var(--accent); }
+.resume-fix, .resume-kw { margin: 14px 0; }
+.resume-fix .hint { display: block; margin: 2px 0 8px; }  /* the advice is a line of its own, and the button below it, not crammed on the end */
+.diff, .resume-fix, .resume-kw { overflow-wrap: anywhere; }
+@media (max-width: 560px) { .resume-cat { grid-template-columns: minmax(0, 1fr); } }  /* on a phone the bar goes under its words */
+@media (min-width: 1100px) {
+  .resume-grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+  .resume-preview-col { position: sticky; top: 16px; }
+  .resume-preview-wrap { height: calc(100vh - 150px); }
+}

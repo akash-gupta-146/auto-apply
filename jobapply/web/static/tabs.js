@@ -1,5 +1,5 @@
 "use strict";
-/* The header's tabs: Apply on a site | AI agent | Profile. The standard pattern: arrow keys, Home and End move between tabs, and the
+/* The header's tabs: Apply on a site | Auto-apply v2 | Auto fill form | Create Resume | Profile. The standard pattern: arrow keys, Home and End move between tabs, and the
    tab you were on is remembered in this browser. Something beside the tabs (the Output column) can belong to some tabs only: it says
    so with data-only-on="<the ids of those tabs, separated by spaces>", and the page says which tab is chosen in data-tab, for the
    layout. */

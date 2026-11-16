@@ -17,17 +17,20 @@ import yaml
 from .. import __version__
 from ..ai_settings import load_ai_settings
 from ..browser import AGENT_URL_ENV, DEFAULT_CDP, DOWN, READY, WINDOWLESS, cdp_state, find_browser
-from ..config import Paths, Profile, load_answers, load_criteria, load_profile
+from ..config import Criteria, Paths, Profile, load_answers, load_criteria, load_profile
+from ..review import APPROVE, REJECT
 from ..report_names import report_label, report_portal
-from . import applications, dashboard, hostos, privacy, questions
+from ..db import sent_today_counts
+from . import applications, auto, dashboard, hostos, privacy, questions
 from .freshness import Freshness
 from .assistant import Assistant
 from .actions import ACTIONS, DEFAULT_PORTAL, PORTALS, ActionError, Options, build_command, describe, parse_options
 from .hostos import HostOS
+from .resumes import ResumeTab
 from .runner import FAILED, FINISHED, STOPPED, Busy, JobRunner
 
-NEEDS_BROWSER = {"check", "rehearse", "apply", "agent"}
-NEEDS_PROFILE = {"rehearse", "apply", "agent"}
+NEEDS_BROWSER = {"check", "rehearse", "apply", "agent", "auto"}
+NEEDS_PROFILE = {"rehearse", "apply", "agent", "auto"}
 FOLDERS = ("data", "reports")
 RECENT_REPORTS = 8
 MAX_REPORT_BYTES = 200_000
@@ -60,7 +63,8 @@ class Panel:
         self.checked: Dict[str, str] = {}  # what the last "Check" saw on each site: ok, logged_out or needs_setup
         self._action, self._portal = "", DEFAULT_PORTAL
         self._login_read_for = 0
-        self.assistant = Assistant(paths, PORTALS, DEFAULT_PORTAL)  # "Ask the AI" on the AI agent tab
+        self.assistant = Assistant(paths, PORTALS, DEFAULT_PORTAL)  # "Ask the AI" on the Auto fill form tab
+        self.resumes = ResumeTab(paths, self._profile)  # the Create Resume tab: build, check, tailor and export a resume
         self.freshness = freshness or Freshness()  # taken now: what this panel started with
 
     # -- what is true right now ----------------------------------------------------------------
@@ -68,7 +72,11 @@ class Panel:
         run = self.runner.snapshot(since)
         self._learn_check(run)
         return {"os": self.host.as_dict(), "version": __version__, "stale": self.freshness.stale(), "setup": self.setup(), "run": run,
-                "agent": applications.live(self.paths)}
+                "agent": applications.live(self.paths), "auto": self.auto()}
+
+    def auto(self) -> Dict[str, Any]:
+        """The Auto-apply v2 tab's part of every look: the job being asked about, today's count against the limit, the latest outcomes."""
+        return auto.live(self.paths, self._read(load_criteria, self.paths) or Criteria(), self._read_db, PORTALS)
 
     def setup(self) -> Dict[str, Any]:
         profile, criteria = self._profile(), self._read(load_criteria, self.paths)
@@ -173,9 +181,18 @@ class Panel:
                               else f"Open the browser first (step 2) and log in to {site} in it.")
         if action_id == "agent" and options.again and not applications.unfinished(self.paths):
             raise ActionError("There is no unfinished application to continue. Open a job page and start the agent instead.")
+        if action_id == "auto":
+            self._require_room(options.portal)
         ai = self._read(load_ai_settings, self.paths)
         if options.ai and not (ai and ai.configured):
             raise ActionError("The AI helper is not set up yet. Use the AI helper button, or turn the switch off.")
+
+    def _require_room(self, portal: str) -> None:
+        """Today's limit has room: otherwise the run would open a browser only to stop at once."""
+        cap = (self._read(load_criteria, self.paths) or Criteria()).daily_cap
+        sent = self._read_db(sent_today_counts, {}).get(portal, 0)
+        if 0 < cap <= sent:
+            raise ActionError(f"You have already sent {sent} of today's {cap} on {PORTALS[portal]}. Raise the daily limit on this tab, or come back tomorrow.")
 
     def _environment(self, agent_options: Optional[Options] = None) -> Dict[str, str]:
         env = dict(os.environ)
@@ -191,6 +208,39 @@ class Panel:
         if not isinstance(session, str) or not isinstance(decision, str):
             raise ActionError("That answer was not understood.")
         return {"recorded": applications.decide(self.paths, session, decision)}
+
+    def auto_decide(self, body: Mapping[str, object]) -> Dict[str, bool]:
+        """Your answer to 'apply to this one?'. Only counts for the job that asked."""
+        token, decision = body.get("token"), body.get("decision")
+        if not isinstance(token, str) or decision not in (APPROVE, REJECT):
+            raise ActionError("That answer was not understood.")
+        return {"recorded": auto.decide(self.paths, token, decision)}
+
+    def auto_limit(self, body: Mapping[str, object]) -> Dict[str, int]:
+        try:
+            return {"cap": auto.set_cap(self.paths, body.get("cap"))}
+        except ValueError as exc:
+            raise ActionError(str(exc)) from None
+
+    def auto_pause(self, body: Mapping[str, object]) -> Dict[str, bool]:
+        if not isinstance(body.get("paused"), bool):
+            raise ActionError("Say whether to pause or resume.")
+        auto.pause(self.paths, body["paused"])
+        return {"paused": body["paused"]}
+
+    def auto_history(self, group: object, text: object, days: object) -> Dict[str, Any]:
+        """The tracker table: what runs acted on, narrowed the way the person chose."""
+        return auto.history(self._read_db, PORTALS, **self._narrowed(group, text, days))
+
+    def export_csv(self, group: object = "", text: object = "", days: object = 0) -> str:
+        return auto.export(self._read_db, PORTALS, **self._narrowed(group, text, days))
+
+    @staticmethod
+    def _narrowed(group: object, text: object, days: object) -> Dict[str, Any]:
+        try:
+            return auto.narrowed(group, text, days)
+        except ValueError as exc:
+            raise ActionError(str(exc)) from None
 
     def agent_pause(self, body: Mapping[str, object]) -> Dict[str, bool]:
         if not isinstance(body.get("paused"), bool):

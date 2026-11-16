@@ -30,6 +30,8 @@ def _sections(dry_run: bool):
         ("Skipped: already applied", (Status.SKIPPED_DUPLICATE,), ""),
         ("Skipped by a challenge", (Status.SKIPPED_CHALLENGE,),
          "A captcha or check was waiting for a human. These are tried again on the next run."),
+        ("Left for a later run", (Status.NEW,),
+         "These were shown to you for approval and nobody answered in time. Nothing was sent; the next run asks again."),
     )
 
 

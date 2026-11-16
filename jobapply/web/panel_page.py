@@ -6,7 +6,7 @@ from __future__ import annotations
 from html import escape
 
 from ..credit import AUTHOR
-from . import agent_card, ask_card, profile_tab
+from . import agent_card, ask_card, auto_card, profile_tab, resume_card
 from .actions import PORTALS, listed
 from .help import help_button
 
@@ -33,7 +33,7 @@ AGENT_RISK = (
     "A job that applies on the company's own website (or has no apply button the program can use) goes to the AI agent instead of "
     "being skipped: it opens the company's form, fills it in, and asks you for anything it cannot answer.")
 APPROVAL_LABEL = "Wait for my approval before the agent sends each one"
-APPROVAL_HINT = ("On (recommended): the agent shows you each application, on the AI agent tab, and sends it only after you press Approve. "
+APPROVAL_HINT = ("On (recommended): the agent shows you each application, on the Auto fill form tab, and sends it only after you press Approve. "
                  "Off: it sends as soon as the form is filled in, without asking you.")
 RECHECK_NONE = "Also re-check jobs skipped earlier (none yet)"  # the script rewrites it with the real number for the chosen site
 # What to tell the person about a site before they use it. A site with no entry here has been proven on the live site.
@@ -165,8 +165,14 @@ def render(token: str) -> str:
 <title>Job Apply: control panel</title>
 <link rel="stylesheet" href="/static/theme.css">
 <script src="/static/panel.js" defer></script>
+<script src="/static/jobtable.js" defer></script>
 <script src="/static/agent.js" defer></script>
 <script src="/static/dashboard.js" defer></script>
+<script src="/static/auto.js" defer></script>
+<script src="/static/resume.js" defer></script>
+<script src="/static/resume-form.js" defer></script>
+<script src="/static/resume-ai.js" defer></script>
+<script src="/static/resume-check.js" defer></script>
 <script src="/static/ask.js" defer></script>
 <script src="/static/tabs.js" defer></script>
 </head>
@@ -183,8 +189,11 @@ def render(token: str) -> str:
   </div>
   <div class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" type="button" role="tab" id="tab-apply" aria-controls="panel-apply" aria-selected="true">Apply on a site</button>
-    <button class="tab" type="button" role="tab" id="tab-agent" aria-controls="panel-agent" aria-selected="false" tabindex="-1">AI agent
+    <button class="tab" type="button" role="tab" id="tab-auto" aria-controls="panel-auto" aria-selected="false" tabindex="-1">Auto-apply v2
+      <span class="badge" id="auto-badge" hidden></span></button>
+    <button class="tab" type="button" role="tab" id="tab-agent" aria-controls="panel-agent" aria-selected="false" tabindex="-1">Auto fill form
       <span class="badge" id="agent-badge" hidden></span></button>
+    <button class="tab" type="button" role="tab" id="tab-resume" aria-controls="panel-resume" aria-selected="false" tabindex="-1">Create Resume</button>
     <button class="tab" type="button" role="tab" id="tab-profile" aria-controls="panel-profile" aria-selected="false" tabindex="-1">Profile</button>
   </div>
 </header>
@@ -211,12 +220,16 @@ New features may be missing, and some buttons may do what they used to. Press <s
       <article class="well report" id="report-view" tabindex="0" aria-label="Report preview" hidden></article>
     </section>
    </div>
+   <div class="tabpanel" role="tabpanel" id="panel-auto" aria-labelledby="tab-auto" hidden>{auto_card.render(PORTALS, SITE_NOTES, AI_DISCLOSURE)}
+   </div>
    <div class="tabpanel" role="tabpanel" id="panel-agent" aria-labelledby="tab-agent" hidden>{agent_card.render(AI_DISCLOSURE)}
+   </div>
+   <div class="tabpanel" role="tabpanel" id="panel-resume" aria-labelledby="tab-resume" hidden>{resume_card.render()}
    </div>
    <div class="tabpanel" role="tabpanel" id="panel-profile" aria-labelledby="tab-profile" hidden>{profile_tab.render(_details_card(), _tools_card(), _privacy_card())}
    </div>
   </div>
-  <aside class="right" data-only-on="tab-apply tab-agent">
+  <aside class="right" data-only-on="tab-apply tab-auto tab-agent">
     <section class="card console-card" id="console" aria-labelledby="h-out">
       <div class="console-head">
         <h2 id="h-out" tabindex="-1">Output</h2>

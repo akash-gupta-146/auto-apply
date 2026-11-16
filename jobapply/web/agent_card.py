@@ -6,7 +6,7 @@ from __future__ import annotations
 def render(ai_disclosure: str) -> str:
     return f"""
     <section class="card" id="agent-card" aria-labelledby="h-agent">
-      <h2 id="h-agent" tabindex="-1">AI agent: any site</h2>
+      <h2 id="h-agent" tabindex="-1">Auto fill form: any site</h2>
       <p>Paste a job page's address below, or open the job page in the browser from step 2, then press Start. The agent works on any
       site: it finds the way to apply, fills in what it can, and asks you for the rest. It never types a password or gets past a
       captcha: you do those. The same agent also takes over, during a run on the Apply tab, the jobs a site cannot apply to itself.</p>

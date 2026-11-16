@@ -42,6 +42,7 @@ from .engine import Engine
 from .matching import evaluate
 from .models import JobCard, SetupIncomplete, Status
 from .report import write_report
+from .review import PauseSwitch, ReviewChannel, ReviewGate
 from .resume import guess_facts, read_text, sync_profile
 from .system import announce, keep_awake
 from .triage import Triage
@@ -234,6 +235,8 @@ def cmd_agent(args) -> None:
 
 
 def cmd_run(args) -> None:
+    if args.review and args.dry_run:
+        raise ConfigError("--review asks before an application is sent, and a rehearsal (--dry-run) sends nothing: use one or the other.")
     paths = Paths.from_env()
     setup_logging(paths)
     profile, criteria = load_profile(paths), load_criteria(paths)
@@ -247,6 +250,8 @@ def cmd_run(args) -> None:
     book = AnswerBook(paths, FactJudge.from_answerer(ai, paths.facts_log) if ai is not None else None)
     resolver = AnswerResolver(profile, book.wordings(), db, args.portal, ai=ai,
                               persist=lambda question, answer: book.remember(question, answer))  # an answer typed on a form folds in too
+    pause = PauseSwitch(paths)
+    pause.set(False)  # a pause from an earlier run must not hold this one still, with nobody knowing why
     with keep_awake(), open_page(args.cdp) as page:
         adapter = ADAPTERS[args.portal](page, profile, criteria, paths.failures)
         popups = PromptJudge.from_answerer(ai, paths.prompt_log) if ai is not None else None
@@ -261,6 +266,7 @@ def cmd_run(args) -> None:
         engine = Engine(
             adapter, db, profile, criteria, resolver, external=handoff,
             minutes=args.minutes, dry_run=args.dry_run, reevaluate=args.reevaluate, suggested=args.suggested, fit_judge=judge, max_attempts=args.attempts,
+            review=ReviewGate(ReviewChannel(paths)) if args.review else None, paused=pause.paused,
             answers_loader=book.wordings,  # so an answer typed in the panel reaches a job that is waiting
         )
         try:
@@ -435,6 +441,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-approval", action="store_true",
                    help="with --agent on a live run: let the agent send without waiting for your approval each time (default: it waits)")
     p.add_argument("--no-guess", action="store_true", help=NO_GUESS_HELP)
+    p.add_argument("--review", action="store_true",
+                   help="live run: show each job that passed your rules on the panel's Auto-apply v2 tab, and apply only after you press Apply "
+                        "(Skip moves on; if nobody answers twice in a row the run stops)")
     p.set_defaults(func=cmd_run)
 
     p = with_cdp(sub.add_parser("agent", help="AI agent: apply on the job page open in your browser (a rehearsal unless --submit)"))

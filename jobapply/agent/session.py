@@ -9,6 +9,8 @@ import dataclasses
 import json
 import logging
 import os
+import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -25,12 +27,26 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+REPLACE_TRIES, REPLACE_WAIT_S = 6, 0.05  # Windows refuses to replace a file that something has open, for the instant it is being read
+
+
 def atomic_write(path: Path, text: str) -> None:
-    """The panel reads these files while the agent writes them: a reader sees the old file or the new one, never half of one."""
+    """The panel reads these files while the agent writes them: a reader sees the old file or the new one, never half of one.
+
+    The scratch file is named for this thread too, so two saves of one file at once never write into the same scratch file. On Windows a
+    reader that has the file open for a moment makes the replace fail with PermissionError: that is waited out, not passed on."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    scratch = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    scratch = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     scratch.write_text(text, encoding="utf-8")
-    os.replace(scratch, path)
+    for attempt in range(REPLACE_TRIES):
+        try:
+            os.replace(scratch, path)
+            return
+        except PermissionError:
+            if attempt == REPLACE_TRIES - 1:
+                scratch.unlink(missing_ok=True)  # leave nothing behind
+                raise
+            time.sleep(REPLACE_WAIT_S)
 
 
 @dataclass

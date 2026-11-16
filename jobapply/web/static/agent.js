@@ -1,5 +1,5 @@
 "use strict";
-/* The AI agent tab: what the agent is doing, what it needs, and your say before anything is sent.
+/* The Auto fill form tab: what the agent is doing, what it needs, and your say before anything is sent.
    Everything from the server or the agent is shown as TEXT, never as HTML: job titles come from the internet. */
 (() => {
   const { $, post, notice, announce, make, refresh, optionsFor, state } = window.PanelKit;
