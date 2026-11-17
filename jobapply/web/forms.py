@@ -10,6 +10,7 @@ from typing import Dict, List, Mapping, Optional, Tuple
 
 from ..ai_fill import Suggestions
 from ..config import Criteria, Profile
+from ..filenames import windows_safe
 from ..resume import normalize_phone
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -113,7 +114,7 @@ def safe_resume_name(filename: str) -> Optional[str]:
     if suffix not in RESUME_SUFFIXES:
         return None
     stem = name[: -len(suffix)][:60] or "resume"
-    return stem + suffix
+    return windows_safe(stem + suffix)
 
 
 def split_list(text: str) -> List[str]:

@@ -112,24 +112,31 @@ fills it in. It is **experimental** and has only been tried against stand-in sit
 If *Guess answers I have not saved* is on, the AI makes a best guess instead of stopping to ask. Every guess is listed before you approve, marked as a
 guess, and kept apart from your own answers. More: [The AI agent](README.md#the-ai-agent-any-job-site).
 
-**Ask the AI** (under the Output box on this tab) answers questions about your own applications ("Why were jobs skipped?"). It only reads what the panel
-already has, cannot do anything, saves nothing, and sends your name, email and phone only if you tick the box. Press **Ask**, or Ctrl+Enter
-(Command+Enter on a Mac). See [Ask the AI about your applications](README.md#ask-the-ai-about-your-applications).
-
 ## Tab 4: Create Resume
 
-Build a resume, find out how a computer will read it, and choose whether your applications use it. Everything stays on your computer.
+Build a resume, find out how a computer will read it, and choose whether your applications use it. Everything stays on your computer. An **ATS** (applicant tracking
+system) is the software that reads a resume before a person does; "ATS-friendly" below means that software can read it.
 
 - **Start** with **New blank resume**, **New from my details** or **New from my uploaded resume**. A resume read from a file is a **draft**: a box lists
   what to check, and anything unreadable (a month, say) is left empty, never guessed.
 - **Write.** Boxes on the left, the finished page on the right (shown whole, shrunk to fit). It saves a moment after you stop typing. Dates are
   year-month, like `2021-03`, or the word `present`. Empty sections are folded away; open one to use it.
 - **Look.** Choose a template, font, size, accent colour, spacing and paper (A4 or Letter). **Show, hide and reorder** the sections. The plain
-  one-column templates are the safest for applicant tracking systems; the two-column one is labelled *less safe for applications*.
+  one-column templates are labelled *ATS-friendly*; the two-column one is labelled *not ATS-friendly*.
 - **Move and remove.** Every job, school, project and bullet has Up, Down and Remove buttons. Focus stays where you were.
-- **Check it.** Press **Check my resume** for a score out of 100. Every lost point says why and how to fix it; **Go to it** puts the cursor in the right
-  box. Paste a **job description** to see which skills it asks for that your resume lacks. **I have this** adds a skill to your Skills, only when you press
-  it, for a skill that is true of you. A skill the job only *prefers* costs nothing. **Save a copy for this job** keeps one resume per job.
+- **Find your way.** An open resume has five **tabs**: *Edit*, *ATS check*, *ATS match*, *Tailor* and *Use*. Only the one you choose is on the page. The arrow keys,
+  Home and End move between the tabs, a resume always opens on *Edit*, and what a tab was showing (a verdict, a job you pasted) is still there when you come back.
+  Above the tabs, whatever tab you are on, are **Back to all resumes**, whether it is saved, and its **ATS status**. In the
+  list, each resume shows its last ATS status (or *Not ATS-checked yet*, or *out of date* if you edited it since) and a **Check ATS** button.
+- **ATS check.** Press **Run the full ATS check**. It prints the PDF you would send, reads it back the way a parser does, checks what you wrote, and gives **one
+  answer**: *ATS-friendly*, *Mostly ATS-friendly* or *Not ATS-friendly yet*, with the first things to fix. **Go to it** puts the cursor in the right box. Underneath,
+  **Check what I wrote** and **Check the PDF only** show each check on its own, with a score out of 100 and the reason for every lost point. "ATS-friendly" means
+  these checks found nothing that software commonly trips on. It is **not a promise** about any employer's system and not a prediction of being hired.
+- **ATS match.** Paste a **job description** and press **Run the ATS match** to see which skills it asks for that your resume lacks. **I have this** adds a skill to
+  your Skills, only when you press it, for a skill that is true of you. A skill the job only *prefers* costs nothing. **Save a copy for this job** keeps one resume per job.
+- **Check a resume you already have.** On the list, **Check the resume my runs send** checks that file as it is, or choose any PDF or Word (.docx) file to check.
+  A PDF is read the way a PDF made here is. A Word file is checked for text boxes, tables, contact details in the header or footer, and pictures, plus the same
+  reading of its text; what a Word file looks like when printed is not guessed. The file is read on your computer and **not kept**.
 - **AI suggestions (optional).** *Improve with AI* (a bullet) and *Suggest a summary with AI* use the AI helper you set up and count against its daily
   limit. A suggestion appears as the difference from your text (struck-through words come out, underlined words go in) and **nothing changes until you
   press Use this**. A suggestion that adds a number, tool or name your resume does not contain is thrown away. A blank like `[X%]` is for you to fill in
@@ -143,12 +150,15 @@ Your resumes are the files in `data/resumes`. More: [The Create Resume tab](READ
 
 ## Tab 5: Profile
 
-Four things, all about you and your data:
+Five things, all about you and your data:
 
 - **Your applications at a glance.** A ring of every job and one bar per site. Tiles: **Submitted** (sent), **Rehearsed** (filled in, not sent),
   **Skipped** (turned away for any reason), **Errors** (tried again next run) and **Waiting** (found, or waiting for your answer). Press a tile or a
   number under a bar to list the jobs behind it, with the reason for each. There is a table view too (*Show these numbers as a table*), so nothing relies
   on colour.
+- **Ask the AI.** Under the dashboard. It answers questions about your own applications ("Why were jobs skipped?"). It only reads what the panel already has,
+  cannot do anything, saves nothing, and sends your name, email and phone only if you tick the box. Press **Ask**, or Ctrl+Enter (Command+Enter on a Mac). It is
+  about the site chosen on the Apply tab, and needs the AI helper set up. See [Ask the AI about your applications](README.md#ask-the-ai-about-your-applications).
 - **Your details.** Links to the [profile form](#the-profile-form), the [AI helper](#the-ai-helper-optional) and the [Questions](#questions) page.
 - **Tools.** *Check my setup*, *Repair the install*, *Install Chrome* (shown only if no browser is found), *Applications (AI agent)*, and shortcuts to
   your data and reports folders.
@@ -205,7 +215,7 @@ application it has handled.
 
 **…apply on a site the panel does not list.** Open the job in the automation browser (step 2) and use the **Auto fill form** tab. Rehearse first.
 
-**…tailor my resume to one job.** Create Resume tab → open your resume → paste the job description → **Check my resume**. Press **I have this** only for skills that
+**…tailor my resume to one job.** Create Resume tab → open your resume → *ATS match* tab → paste the job description → **Run the ATS match**, then the *ATS check* tab → **Run the full ATS check**. Press **I have this** only for skills that
 are true. Fix what the check lists. **Save a copy for this job**, then **Download as a PDF**. To make runs use it, tick *Yes, use this resume from now on* and press
 **Use this resume**.
 

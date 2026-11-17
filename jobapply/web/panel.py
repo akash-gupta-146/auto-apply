@@ -63,7 +63,7 @@ class Panel:
         self.checked: Dict[str, str] = {}  # what the last "Check" saw on each site: ok, logged_out or needs_setup
         self._action, self._portal = "", DEFAULT_PORTAL
         self._login_read_for = 0
-        self.assistant = Assistant(paths, PORTALS, DEFAULT_PORTAL)  # "Ask the AI" on the Auto fill form tab
+        self.assistant = Assistant(paths, PORTALS, DEFAULT_PORTAL)  # "Ask the AI" on the Profile tab
         self.resumes = ResumeTab(paths, self._profile)  # the Create Resume tab: build, check, tailor and export a resume
         self.freshness = freshness or Freshness()  # taken now: what this panel started with
 

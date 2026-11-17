@@ -13,6 +13,7 @@ from typing import NamedTuple, Optional
 from pypdf import PdfReader
 
 from ..browser import find_browser
+from ..filenames import windows_safe
 
 NO_BROWSER = "Chrome is needed to make the PDF, and none was found. Install Chrome (the Install Chrome button on the Apply tab), then try again."
 _ONE_AT_A_TIME = threading.Lock()
@@ -31,7 +32,7 @@ def filename(name: str) -> str:
     """`{FullName}_Resume.pdf`, with nothing in it a file system or a download header could object to."""
     kept = "".join(char if _fit_for_a_name(char) else "_" for char in name)  # not \\w: that drops the vowel signs of Hindi, Tamil and others
     cleaned = "_".join(part for part in (piece.strip(".") for piece in kept.split("_")) if part)  # "..", "." and empty pieces are nothing
-    return f"{cleaned[:60] or 'My'}_Resume.pdf"
+    return windows_safe(f"{cleaned[:60] or 'My'}_Resume.pdf")
 
 
 def _fit_for_a_name(char: str) -> bool:

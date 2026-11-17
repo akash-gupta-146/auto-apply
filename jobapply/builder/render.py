@@ -132,6 +132,11 @@ TEMPLATES: Dict[str, Template] = {t.id: t for t in (
     Template("modern", "Modern", "One column with your accent colour on the name and headings. Still plain text underneath.",
              "h1{font-size:2em;margin:0;color:var(--accent)}.headline{margin:.1em 0;font-weight:600}.contact{margin:.2em 0}"
              "h2{font-size:1.05em;color:var(--accent);border-left:4px solid var(--accent);padding-left:.5em;margin:var(--gap) 0 .4em}"),
+    Template("simple", "Simple", "One column, no rules and no colour: nothing but text. What a parser reads most easily.",
+             "h1{font-size:1.7em;margin:0}.headline,.contact{margin:.15em 0}h2{font-size:1em;font-weight:700;text-transform:uppercase;margin:var(--gap) 0 .3em}"),
+    Template("elegant", "Elegant", "One column, centred, with a serif look to the headings and a fine rule in your accent colour. Still plain text underneath.",
+             "h1{font-size:1.9em;margin:0;letter-spacing:.08em;font-weight:600;text-align:center;color:var(--accent)}.headline,.contact{text-align:center;margin:.2em 0}"
+             "h2{font-family:Georgia,'Times New Roman',serif;font-size:1.1em;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);padding-bottom:.1em;margin:var(--gap) 0 .4em}"),
     Template("sidebar", "Sidebar (creative)", "Two columns with the details beside the experience. Looks different, but some applicant tracking systems "
              "read columns out of order, so it is less safe for applications.",
              ".layout{display:grid;grid-template-columns:30% 1fr;column-gap:1.4em}h1{font-size:1.9em;margin:0;color:var(--accent)}"

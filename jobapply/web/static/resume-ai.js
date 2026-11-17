@@ -57,6 +57,8 @@
     } finally { host.removeAttribute("aria-busy"); }
   }
 
+  kit.showSuggestions = show;  // resume-enrich.js shows its bullets the same way
+  kit.difference = difference;  // resume-tailor.js shows its changes the same way
   kit.suggestBullet = (row, textarea, entry) => ask(row, "bullet", { bullet: textarea.value, title: entry.title || "", emphasise: kit.emphasise }, textarea,
     `${textarea.labels[0].textContent.toLowerCase()} of ${entry.title || entry.company || "this job"}`);
   kit.suggestSummary = (body, textarea) => ask(body.querySelector("button"), "summary", {}, textarea, "your summary");

@@ -14,11 +14,15 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 from .. import skills_vocab
 from ..ai_settings import load_ai_settings
 from ..builder import ai as resume_ai
-from ..builder import ats, doc as store, importer, pdf, render, tailor
+from ..builder import ats, checkstore, doc as store, importer, pdf, pdfcheck, render, tailor, tailoring
+from ..builder import match as fit
 from ..config import ConfigError, Criteria, Paths, Profile, load_criteria, load_profile, save_profile
 from ..db import Database
 from ..resume import read_text, sync_profile
 from .actions import ActionError
+from .resume_ats import AtsChecker
+from .resume_jobs import JobReader
+from .resume_tailoring import Tailorer
 
 MAX_JOB_TEXT = 20_000  # chars of a pasted job description
 MAX_EXTRA = 20  # words you can ask to have looked for
@@ -46,8 +50,12 @@ def _text(value: object, limit: int, what: str) -> str:
 
 class ResumeTab:
     def __init__(self, paths: Paths, read_profile: Callable[[], Optional[Profile]],
-                 make_ai: Callable[..., resume_ai.ResumeAi] = resume_ai.make_resume_ai, make_pdf: Callable[..., pdf.Exported] = pdf.make_pdf):
+                 make_ai: Callable[..., resume_ai.ResumeAi] = resume_ai.make_resume_ai, make_pdf: Callable[..., pdf.Exported] = pdf.make_pdf,
+                 jobs: Optional[JobReader] = None):
         self.paths, self._profile, self._make_ai, self._make_pdf = paths, read_profile, make_ai, make_pdf
+        self._jobs = jobs or JobReader()
+        self._ats = AtsChecker(paths, read_profile, self._printed)
+        self._tailor = Tailorer(paths, lambda made_paths, db: self._make_ai(made_paths, db))  # looked up at the time of asking, so there is one place that says which AI
         self._writes = threading.Lock()  # the server answers each request in its own thread: one change to the saved resumes at a time
 
     # -- the list and the choices ---------------------------------------------------------------
@@ -56,11 +64,12 @@ class ResumeTab:
         profile = self._profile()
         settings = load_ai_settings(self.paths) if self.paths.ai.exists() else None
         return {
-            "resumes": store.listing(self.paths), "templates": render.catalog(),
+            "resumes": [{**item, "ats": checkstore.load(self.paths, item["id"], item["version"])} for item in store.listing(self.paths)], "templates": render.catalog(),
             "uploaded": Path(profile.resume_path).name if profile and profile.resume_path else "", "has_profile": bool(profile),
             "ai": bool(settings and settings.configured),
             "choices": {"fonts": list(store.FONTS), "sizes": list(store.SIZES), "spacings": list(store.SPACINGS), "pages": list(store.PAGES),
-                        "sections": [{"id": key, "heading": store.HEADINGS[key]} for key in store.SECTIONS], "limits": store.LIMITS},
+                        "sections": [{"id": key, "heading": store.HEADINGS[key]} for key in store.SECTIONS], "limits": store.LIMITS,
+                        "strengths": [{"id": key, "name": tailoring.STRENGTH_NAMES[key], "about": about} for key, about in tailoring.STRENGTHS.items()]},
         }
 
     @plainly
@@ -104,6 +113,7 @@ class ResumeTab:
     def delete(self, body: Mapping[str, Any]) -> Dict[str, bool]:
         with self._writes:
             store.remove(self.paths, body.get("id"))
+            checkstore.forget(self.paths, body.get("id"))
         return {"deleted": True}
 
     # -- checking and tailoring ------------------------------------------------------------------
@@ -114,6 +124,65 @@ class ResumeTab:
         job = _text(body.get("job"), MAX_JOB_TEXT, "job description").strip()
         coverage = tailor.coverage(doc, job, self._words(body.get("extra"))) if job else None
         return ats.analyze(doc, coverage)
+
+    @plainly
+    def pdf_check(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """The saved resume printed as the PDF you would send, and read back the way a parser reads it: what survives, in what order, and what it could not read."""
+        doc, data = self._printed(body.get("id"), body.get("template"))
+        return pdfcheck.analyze(data, doc)
+
+    @plainly
+    def ats_report(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """The one answer to "is this resume ATS-friendly?": its PDF printed and read back, and what was written, as saved. Remembered for the list."""
+        return self._ats.of_resume(body.get("id"))
+
+    @plainly
+    def ats_current(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """The same answer for the resume your runs send now, the file as it is."""
+        return self._ats.of_current()
+
+    @plainly
+    def ats_file(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """The same answer for a PDF or Word file you chose. Checked and forgotten: nothing of it is kept."""
+        return self._ats.of_file(_text(body.get("name"), 120, "file name"), body.get("data"))
+
+    def _printed(self, resume_id: object, template: object = None) -> Tuple[Dict[str, Any], bytes]:
+        """A saved resume and its PDF, printed the way the download is."""
+        doc, page = self._page(resume_id, template)
+        return doc, self._make_pdf(page, doc["theme"]["page"]).data
+
+    @plainly
+    def job(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """A job description from a web address, from the job page open in your browser, or from text you pasted. Shown in the job box; nothing is stored."""
+        return self._jobs.read(body)
+
+    @plainly
+    def match(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """How the resume in the editor lines up with the job: a band, the factors behind it, and the evidence for each requirement. Never a percentage."""
+        text, title = self._job_of(body)
+        return fit.evaluate(store.normalize(body.get("resume")), text, title, self._words(body.get("extra")))
+
+    @plainly
+    def tailor(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """Changes that would suit the job, from rules and (if asked for) the AI helper, every one checked. Suggestions only: nothing is changed here."""
+        text, title = self._job_of(body)
+        return self._tailor.propose(store.normalize(body.get("resume")), text, title, _text(body.get("strength"), 20, "strength"), body.get("ai") is not False,
+                                    self._words(body.get("extra")))
+
+    @plainly
+    def tailor_apply(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """A new resume, named for the job, with the changes you accepted. The one you tailored from stays as it was."""
+        job = body.get("job") if isinstance(body.get("job"), Mapping) else {}
+        with self._writes:
+            return self._tailor.make_copy(body.get("id"), body.get("changes"), job, _text(body.get("title"), store.LIMITS["title"], "name").strip())
+
+    @staticmethod
+    def _job_of(body: Mapping[str, Any]) -> Tuple[str, str]:
+        """The job description and the title of the job in a request, or what to do if there is none."""
+        text = _text(body.get("job"), MAX_JOB_TEXT, "job description").strip()
+        if not text:
+            raise ActionError("Give the job first: paste its description, or read it from its web address.")
+        return text, _text(body.get("title"), store.LIMITS["short"], "job title").strip()
 
     def _words(self, typed: object) -> List[str]:
         """The words to look for besides the shared skills list: what you typed, then your own profile skills and search words that the list does not know."""
@@ -136,6 +205,17 @@ class ResumeTab:
         return {"skills": tailor.with_skill(store.normalize(body.get("resume")), name)["skills"]}
 
     # -- the AI ----------------------------------------------------------------------------------
+    @plainly
+    def enrich(self, body: Mapping[str, Any]) -> Dict[str, Any]:
+        """Bullets that put what you said you did into resume style: the AI helper words it, and cannot add to it. Suggestions only."""
+        db = Database(self.paths.db)  # the daily limit counts this like any other request
+        try:
+            result = self._make_ai(self.paths, db).bullet_from_words(_text(body.get("said"), store.LIMITS["bullet"], "answer"), _text(body.get("skill"), store.LIMITS["short"], "skill"),
+                                                                     _text(body.get("title"), store.LIMITS["short"], "title"))
+        finally:
+            db.conn.close()
+        return {"options": result.options, "dropped": result.dropped}
+
     @plainly
     def suggest(self, body: Mapping[str, Any]) -> Dict[str, Any]:
         """Rewrites of one bullet, or summaries, from the AI helper. Suggestions only: nothing is changed here."""

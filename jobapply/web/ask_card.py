@@ -1,4 +1,4 @@
-"""The "Ask the AI" card, under Output on the Auto fill form tab: the markup only. ask.js fills in the conversation, always as text.
+"""The "Ask the AI" card, on the Profile tab, under the dashboard: the markup only. ask.js fills in the conversation, always as text.
 
 What the AI is shown, and what it is told, is in assistant.py; the card says the same in words, because the person asking is
 the one whose details are sent.
@@ -24,7 +24,7 @@ STARTERS = (
 def render() -> str:
     starters = "".join(f'<button class="btn btn-small" type="button" data-ask="{text}">{text}</button>' for text in STARTERS)
     return f"""
-    <section class="card ask-card" id="ask-card" data-only-on="tab-agent" aria-labelledby="h-ask" hidden>
+    <section class="card ask-card" id="ask-card" aria-labelledby="h-ask">
       <h2 id="h-ask">Ask the AI</h2>
       <p class="ask-about">About <strong id="ask-site"></strong> (change it on the Apply tab). <span id="ask-provider"></span></p>
       <p class="hint" id="ask-hint">{RISK}</p>

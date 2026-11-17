@@ -1,4 +1,4 @@
-"""The Profile tab: a dashboard of what every site has done with your jobs, then your details, the tools and your personal information.
+"""The Profile tab: a dashboard of what every site has done with your jobs, a place to ask the AI about it, then your details, the tools and your personal information.
 
 Markup only. dashboard.js draws the live parts (as SVG shapes and text, never as HTML) from the numbers the panel sends, and fills
 the list of applications that opens when you press a tile, a number or a stripe of a bar.
@@ -37,6 +37,6 @@ def _dashboard() -> str:
 </section>"""
 
 
-def render(details_card: str, tools_card: str, privacy_card: str) -> str:
-    """The destructive section goes last, so it is never what you reach for by accident."""
-    return _dashboard() + details_card + tools_card + privacy_card
+def render(ask_card: str, details_card: str, tools_card: str, privacy_card: str) -> str:
+    """Questions about the applications come right after the picture of them. The destructive section goes last, so it is never what you reach for by accident."""
+    return _dashboard() + ask_card + details_card + tools_card + privacy_card

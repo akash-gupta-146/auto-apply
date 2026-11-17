@@ -1,5 +1,5 @@
 "use strict";
-/* "Ask the AI", under Output on the Auto fill form tab. The conversation lives in this page only: reloading it starts afresh, and nothing
+/* "Ask the AI", on the Profile tab. The conversation lives in this page only: reloading it starts afresh, and nothing
    is saved anywhere. Everything the AI writes is shown as plain text (never as HTML), so an answer can neither run anything nor
    look like a link. The server decides what the AI is shown and tells us in words what was sent. */
 (() => {
@@ -14,6 +14,14 @@
     return { id: chosen.value, label: chosen.dataset.label };
   };
 
+  /* Shows a new message by scrolling the talk, and only the talk: the card is in the page now, and a long answer must never drag the page away from where you were
+     reading. A message that is too tall for the talk is shown from its beginning, any other from its end (the same as scrollIntoView with "nearest", minus the page). */
+  function reveal(item) {
+    const area = item.closest(".ask-scroll"), within = area.getBoundingClientRect(), at = item.getBoundingClientRect();
+    if (at.top < within.top || at.height > within.height) area.scrollTop += at.top - within.top;
+    else if (at.bottom > within.bottom) area.scrollTop += at.bottom - within.bottom;
+  }
+
   function say(who, text, extra = "") {
     const item = make("li", `ask-msg ask-${who}`);
     item.append(make("strong", "ask-who", who === "user" ? "You" : "AI"), make("p", "ask-text", text));
@@ -21,14 +29,14 @@
     $("ask-clear").hidden = false;
     $("ask-starters").hidden = true;  // before the scrolling: the sizes are then the final ones
     $("ask-log").append(item);
-    item.scrollIntoView({ block: "nearest" });
+    reveal(item);
   }
 
   function sayProblem(text) {  // not part of the talk: it is never sent back to the AI
     const item = make("li", "ask-msg ask-problem");
     item.append(make("strong", "ask-who", "Problem"), make("p", "ask-text", text));
     $("ask-log").append(item);
-    item.scrollIntoView({ block: "nearest" });
+    reveal(item);
   }
 
   function renderState() {
@@ -64,7 +72,7 @@
       sayProblem(error.message);
     } finally {
       setBusy(false);
-      box.focus();
+      box.focus({ preventScroll: true });  // back where you type; the page stays where it is, and typing brings the box into view
     }
   }
 

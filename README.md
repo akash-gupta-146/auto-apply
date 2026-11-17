@@ -337,10 +337,42 @@ The **Create Resume** tab makes a resume you can send, and tells you how a compu
   read from a file is a **draft**: the tab lists what to check, and anything it could not read (a month, say) is left empty, never guessed.
 - **Write.** The text boxes are on the left and the page it prints is on the right, shown whole and shrunk to fit. It saves a moment after you stop
   typing. Choose a template, font, size, accent colour, spacing and paper (A4 or Letter), and show, hide and reorder the sections. The plain one-column
-  templates are the safest for applicant tracking systems; the two-column one says it is *less safe for applications* right in its name.
-- **Check it.** One score out of 100, with the reason for every point lost, how to fix it, and **Go to it**, which puts the cursor in the right box.
-  Paste a job description to see which of the skills it asks for your resume does not mention. **I have this** adds a skill to your Skills, and only
-  when you press it, for a skill that is true of you. A skill the job only *prefers* costs nothing. **Save a copy for this job** keeps one resume per job.
+  templates (Classic, Compact, Modern, Simple, Elegant) are the safest for applicant tracking systems; the two-column Sidebar says it is *not ATS-friendly*
+  right in its name (an **ATS**, applicant tracking system, is the software that reads a resume before a person does).
+- **Start for a job.** *Start a resume for a job* makes a draft from your saved details (or a blank one) and takes you to the *ATS match* tab, where the job goes.
+- **ATS match: how well it fits a job.** Give the job by pasting it, by its **web address** (public pages only: a page that wants you to sign in, or shows a security check, is
+  *not* worked around: the tab says so in words), or with *Read the job open in my browser*, which reads the one tab you have open in the browser this program uses
+  (signed in as you), only when you press it, and changes nothing on the page. What was read goes into a box for you to read and trim. You then get a **band**
+  (*Strong, Good, Partial or Weak match*) with the four things it is made of, the skills the job asks for that your resume has and lacks, and **the evidence for
+  each requirement** (a quote from your resume, with **Go to it**). It compares words. It is **never a percentage and never a prediction** that you would be shortlisted,
+  and it says so.
+- **Done it, but it is not on your resume?** For a skill the job asks for that your resume lacks, say what you did in your own words. *Use my words* adds them as a
+  bullet under the job you pick (and the skill to your Skills), only when you press it. *Ask the AI helper to word it* only rephrases what you said: a bullet with a
+  number, tool or name you did not say is thrown away.
+- **Tailor it to the job.** Choose *Light touch*, *Match its words* or *Fullest*. You get a short list of **small changes**, each shown as before and after with the
+  reason, and nothing is accepted for you. The changes are reworded bullets and summary (from the AI helper, if you ask it) and putting the skills the job asks for
+  first (from rules, no AI needed). Names, employers, titles, dates, schools and contact details can never change, and every change is checked against your resume: one
+  that adds a number, a skill, a tool, a name or a level (*Senior*) your resume does not already say is thrown away, and **a skill that only the job names is never
+  taken as yours**. The accepted changes make a **separate copy** named for the job; the resume you tailored from does not change.
+- **Find your way.** An open resume has five **tabs**, *Edit | ATS check | ATS match | Tailor | Use*, and only the chosen one is on the page (arrow keys, Home and End move
+  between them, the way they do between the panel's own tabs; a resume opens on *Edit*; what a tab was showing is kept). Above them, on every tab, are **Back to all resumes**, the
+  saved state, any save conflict and the resume's **ATS status**. *Go to it* in a check takes you to *Edit* and into the box. Code: `static/resume-tabs.js`. The list shows each resume's last ATS status (the word and a mark,
+  never colour alone; *out of date* once you edit it) with a **Check ATS** button. The status is remembered in `data/resumes/checks/`: the verdict only, nothing of the PDF.
+- **ATS check.** **Run the full ATS check** gives **one answer**, *ATS-friendly*, *Mostly ATS-friendly* or *Not ATS-friendly yet*, made from the two checks below, with the
+  first three things to fix. It counts what makes a resume **unreadable** (a blocker is no text, no email, no name, two columns; a warning is something that could be
+  missed or misread) and does not count advice about writing it well (weak verbs, no numbers) or fit to one job. It is a statement about these checks, never a promise
+  about any employer's system or a prediction of being hired, and it says so.
+- **Check what I wrote.** One score out of 100, with the reason for every point lost, how to fix it, and **Go to it**, which puts the cursor in the right box. If you gave a job,
+  it also shows which of the skills it asks for your resume does not mention. **I have this** adds a skill to your Skills, and only when you press it, for a skill that
+  is true of you. A skill the job only *prefers* costs nothing. **Save a copy for this job** keeps one resume per job.
+- **Check a resume you already have.** On the list, **Check the resume my runs send** (the file as it is) or a file you choose (a PDF or a Word `.docx`, told apart by what is
+  inside, up to 8 MB, never kept). A PDF gets the same PDF check as below. A Word file gets the rules that read text plus four that look inside it: *text boxes* (many systems
+  skip them), *tables*, *contact details in the header or footer*, and *pictures* (a tip, no cost). A `.docx` that declares an XML entity is refused, not opened. Layout and
+  reading order are not guessed for a Word file. Code: `builder/verdict.py`, `builder/filecheck.py`, `builder/checkstore.py`, `web/resume_ats.py`.
+- **Check the PDF only.** The first check reads what you wrote. This one prints the PDF you would send and reads it **back the way a parser does**: whether it has any text,
+  whether two columns would be read across, whether your jobs come out in order, whether your name, email, employers and schools came through whole, whether the
+  headings and dates are ones a system looks for. It shows the text the parser gets. Blockers (no text, no email, two columns) put a ceiling on the score; a warning
+  costs its part once; tips are never in the number.
 - **AI suggestions (optional).** *Improve with AI* on a bullet and *Suggest a summary with AI* use the AI helper you already set up and count against its daily limit.
   A suggestion is shown as the difference from what you wrote, and nothing changes until you press **Use this**. A suggestion that adds a number, a tool or a
   name that is not in your resume is thrown away before you see it. Emails, phone numbers and employers' names are not sent. A blank like `[X%]` is for you to
@@ -403,7 +435,7 @@ the AI helper is), the AI makes its **best guess** instead of stopping to ask yo
 
 **Company sites it has never seen.** The agent reads each page for what it is (job, application form, questions, review, sign-in...),
 not by the site's name, so a new careers site needs no new code. It was checked against a real company page (Adobe's, reached from
-LinkedIn) in a rehearsal, and that taught it these things, each now covered by a test (`tests/test_agent_unknown_sites.py`):
+LinkedIn) in a rehearsal, and that taught it these things, each now covered by a test:
 
 - A job page that also carries a **job-alert sign-up**, "Save job" ticks, a follow or a share is still a job page. It presses *Apply now*;
   it never types into those widgets. (Before, it typed your email into the alert box and said the form was ready to send.)
@@ -480,7 +512,7 @@ and press Delete account" gets nowhere. Every request is limited per application
 
 ### Ask the AI about your applications
 
-On the **Auto fill form** tab, under *Output*, is **Ask the AI**: type a question (*How many jobs did I apply to here? Why were
+On the **Profile** tab, under the dashboard, is **Ask the AI**: type a question (*How many jobs did I apply to here? Why were
 jobs skipped? Which ones had errors? What should I do next?*) and press **Ask** (or Ctrl+Enter, Command+Enter on a Mac). It is
 about the site chosen on the *Apply* tab, and it needs the AI helper to be set up (the card says so, with a link, if it is not).
 
@@ -786,6 +818,9 @@ jobapply status                          # queue counts, AI usage, latest report
 
 ## For developers
 
+The tests, the `scripts/` folder (the ZIP builder) and the design notes live in the author's own checkout and are **not part of this download**, so the commands
+below work only there. They are described here so you can see how the program is kept honest.
+
 ```bash
 .venv/bin/python -m pip install -e ".[dev]"
 .venv/bin/python -m pytest
@@ -795,8 +830,8 @@ The suite is in two halves. Tests that drive a real Chrome are marked `browser` 
 or `own_browser` fixture is the mark; see `tests/conftest.py`), so nobody has to remember to mark a new one:
 
 ```bash
-.venv/bin/python -m pytest -m "not browser"   # about 1,500 logic tests, under 3 minutes: run this while you work
-.venv/bin/python -m pytest -m browser         # about 600 tests in a real browser, 20+ minutes: run before you commit a change to a portal or the agent
+.venv/bin/python -m pytest -m "not browser"   # about 2,200 logic tests, a few minutes: run this while you work
+.venv/bin/python -m pytest -m browser         # about 700 tests in a real browser, 20+ minutes: run before you commit a change to a portal or the agent
 .venv/bin/python -m pytest                    # everything
 ```
 

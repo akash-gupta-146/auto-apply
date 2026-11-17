@@ -21,7 +21,7 @@ from ..config import Paths
 SECTIONS = ("summary", "experience", "education", "skills", "projects", "certifications", "languages")  # the default order
 HEADINGS = {"summary": "Summary", "experience": "Experience", "education": "Education", "skills": "Skills",
             "projects": "Projects", "certifications": "Certifications", "languages": "Languages"}  # the plain names an ATS looks for
-TEMPLATES = ("classic", "compact", "modern", "sidebar")
+TEMPLATES = ("classic", "compact", "modern", "simple", "elegant", "sidebar")
 FONTS, SPACINGS, PAGES = ("sans", "serif"), ("compact", "normal", "relaxed"), ("A4", "Letter")
 SIZES = (9.5, 10, 10.5, 11, 11.5, 12)  # font size in points
 DEFAULT_THEME = {"font": "sans", "size": 10.5, "accent": "#1f4e8c", "spacing": "normal", "page": "A4"}
@@ -106,6 +106,13 @@ def _basics(raw: object) -> Dict[str, Any]:
             "location": _text(raw.get("location"), LIMITS["short"]), "links": links}
 
 
+def _job(raw: object) -> Optional[Dict[str, str]]:
+    """The job a tailored copy was made for (its title, company and web address), or nothing for a resume that was not."""
+    raw = raw if isinstance(raw, Mapping) else {}
+    found = {"title": _text(raw.get("title"), LIMITS["short"]), "company": _text(raw.get("company"), LIMITS["short"]), "url": _url(raw.get("url"))}
+    return found if any(found.values()) else None
+
+
 def _kept(entries: Iterable[Dict[str, Any]], *fields: str) -> List[Dict[str, Any]]:
     """Entries that say anything at all: one with every field empty is a form row nobody filled in."""
     return [entry for entry in entries if any(entry[field] for field in fields)]
@@ -143,9 +150,13 @@ def normalize(raw: object) -> Dict[str, Any]:
     raw = raw if isinstance(raw, Mapping) else {}
     hidden = [s for s in dict.fromkeys(raw.get("hidden") if isinstance(raw.get("hidden"), list) else []) if s in SECTIONS]
     template = raw.get("template")
-    return {"title": _text(raw.get("title"), LIMITS["title"]) or "My resume", "template": template if template in TEMPLATES else TEMPLATES[0],
-            "theme": _theme(raw.get("theme")), "order": _order(raw.get("order")), "hidden": hidden,
-            "basics": _basics(raw.get("basics")), **_sections(raw)}
+    clean = {"title": _text(raw.get("title"), LIMITS["title"]) or "My resume", "template": template if template in TEMPLATES else TEMPLATES[0],
+             "theme": _theme(raw.get("theme")), "order": _order(raw.get("order")), "hidden": hidden,
+             "basics": _basics(raw.get("basics")), **_sections(raw)}
+    job = _job(raw.get("job"))
+    if job:  # only a copy made for a job has one: every other resume is exactly as it was
+        clean["job"] = job
+    return clean
 
 
 # -- what a resume says -------------------------------------------------------------------------------------------------------------------
@@ -244,5 +255,6 @@ def listing(paths: Paths) -> List[Dict[str, Any]]:
             doc = load(paths, path.stem)
         except NotFound:
             continue
-        found.append({"id": doc["id"], "title": doc["title"], "template": doc["template"], "updated": doc["updated"], "name": doc["basics"]["name"]})
+        found.append({"id": doc["id"], "title": doc["title"], "template": doc["template"], "updated": doc["updated"], "version": doc["version"], "name": doc["basics"]["name"],
+                      "job": " at ".join(part for part in (doc.get("job", {}).get("title"), doc.get("job", {}).get("company")) if part)})
     return sorted(found, key=lambda item: item["updated"], reverse=True)

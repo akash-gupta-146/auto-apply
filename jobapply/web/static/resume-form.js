@@ -179,6 +179,7 @@
     while (place) {
       const target = document.querySelector(`[data-pointer="${place}"]`);
       if (target) {
+        kit.showTab("edit");  // the box is in the Edit part, which may be folded away: a box that is not shown cannot be focused
         for (let up = target.closest("details"); up; up = up.parentElement && up.parentElement.closest("details")) up.open = true;
         const focusable = target.matches("details") ? target.querySelector("summary") : target;
         focusable.focus(); focusable.scrollIntoView({ block: "center" });

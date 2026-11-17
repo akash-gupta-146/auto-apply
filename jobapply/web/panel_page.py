@@ -164,6 +164,7 @@ def render(token: str) -> str:
 <meta name="panel-token" content="{escape(token, quote=True)}">
 <title>Job Apply: control panel</title>
 <link rel="stylesheet" href="/static/theme.css">
+<link rel="stylesheet" href="/static/resume-theme.css">
 <script src="/static/panel.js" defer></script>
 <script src="/static/jobtable.js" defer></script>
 <script src="/static/agent.js" defer></script>
@@ -172,7 +173,12 @@ def render(token: str) -> str:
 <script src="/static/resume.js" defer></script>
 <script src="/static/resume-form.js" defer></script>
 <script src="/static/resume-ai.js" defer></script>
+<script src="/static/resume-job.js" defer></script>
+<script src="/static/resume-enrich.js" defer></script>
+<script src="/static/resume-tailor.js" defer></script>
 <script src="/static/resume-check.js" defer></script>
+<script src="/static/resume-tabs.js" defer></script>
+<script src="/static/resume-ats.js" defer></script>
 <script src="/static/ask.js" defer></script>
 <script src="/static/tabs.js" defer></script>
 </head>
@@ -226,7 +232,7 @@ New features may be missing, and some buttons may do what they used to. Press <s
    </div>
    <div class="tabpanel" role="tabpanel" id="panel-resume" aria-labelledby="tab-resume" hidden>{resume_card.render()}
    </div>
-   <div class="tabpanel" role="tabpanel" id="panel-profile" aria-labelledby="tab-profile" hidden>{profile_tab.render(_details_card(), _tools_card(), _privacy_card())}
+   <div class="tabpanel" role="tabpanel" id="panel-profile" aria-labelledby="tab-profile" hidden>{profile_tab.render(ask_card.render(), _details_card(), _tools_card(), _privacy_card())}
    </div>
   </div>
   <aside class="right" data-only-on="tab-apply tab-auto tab-agent">
@@ -238,7 +244,7 @@ New features may be missing, and some buttons may do what they used to. Press <s
       </div>
       <p class="notice" id="notice" hidden></p>
       <pre class="well log" id="log" role="log" aria-live="off" tabindex="0"></pre>
-    </section>{ask_card.render()}
+    </section>
   </aside>
 </main>
 

@@ -23,6 +23,7 @@ from .health_page import ACTIONS, banner_for
 from .markdown import parse_markdown
 from .panel import Panel
 from .questions import NotSaved
+from .resume_ats import FILE_BODY
 from .runner import Busy
 
 DEFAULT_PORT = 8765
@@ -55,13 +56,13 @@ ENVELOPE_BYTES = 64 * 1024  # room for form fields around an upload
 MAX_JSON_BYTES = 8 * 1024
 RESUME_BODY = 512 * 1024  # a whole resume at its largest, with a job description beside it
 RESUME_POSTS = {"/api/resume/new": "create", "/api/resume/save": "save", "/api/resume/duplicate": "duplicate", "/api/resume/delete": "delete",
-                "/api/resume/check": "check", "/api/resume/skill": "add_skill", "/api/resume/suggest": "suggest", "/api/resume/use": "use"}  # route -> ResumeTab method
-BODY_LIMITS = {"/api/ask": 64 * 1024, **{route: RESUME_BODY for route in RESUME_POSTS}}  # a question, or a resume, is longer than a button press
+                "/api/resume/check": "check", "/api/resume/job": "job", "/api/resume/match": "match", "/api/resume/pdfcheck": "pdf_check", "/api/resume/ats": "ats_report", "/api/resume/atscurrent": "ats_current", "/api/resume/atsfile": "ats_file", "/api/resume/tailor": "tailor", "/api/resume/enrich": "enrich", "/api/resume/tailor/apply": "tailor_apply", "/api/resume/skill": "add_skill", "/api/resume/suggest": "suggest", "/api/resume/use": "use"}  # route -> ResumeTab method
+BODY_LIMITS = {"/api/ask": 64 * 1024, **{route: RESUME_BODY for route in RESUME_POSTS}, "/api/resume/atsfile": FILE_BODY}  # a question, or a resume, is longer than a button press
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
 JS = "text/javascript; charset=utf-8"
-STATIC_TYPES = {"theme.css": "text/css; charset=utf-8", "panel.js": JS, "agent.js": JS, "dashboard.js": JS, "ask.js": JS, "tabs.js": JS, "auto.js": JS, "jobtable.js": JS,
-                "resume.js": JS, "resume-form.js": JS, "resume-ai.js": JS, "resume-check.js": JS}
+STATIC_TYPES = {"theme.css": "text/css; charset=utf-8", "resume-theme.css": "text/css; charset=utf-8", "panel.js": JS, "agent.js": JS, "dashboard.js": JS, "ask.js": JS, "tabs.js": JS, "auto.js": JS, "jobtable.js": JS,
+                "resume.js": JS, "resume-form.js": JS, "resume-ai.js": JS, "resume-job.js": JS, "resume-enrich.js": JS, "resume-tailor.js": JS, "resume-check.js": JS, "resume-tabs.js": JS, "resume-ats.js": JS}
 FILTERS = ("group", "text", "days")  # what the tracker can be narrowed by, in the order Panel.auto_history takes them
 TOKEN_HEADER = "X-Token"
 SECURITY_HEADERS = {

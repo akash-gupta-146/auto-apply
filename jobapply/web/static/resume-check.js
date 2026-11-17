@@ -5,17 +5,16 @@
 (() => {
   const { $, make, post, announce } = window.PanelKit;
   const kit = window.ResumeKit, { state } = kit;
-  const SEVERITY = { error: "Fix this", warn: "Should fix", info: "Could improve" };
+  const SEVERITY = { error: "Fix this", warn: "Should fix", info: "Could improve", blocker: "Fix this", warning: "Should fix", tip: "Tip" };  // the data check, then the PDF check
+  const FIELD = { found: "came through", garbled: "came through damaged", missing: "did not come through" };
   const grade = (score) => (score >= 85 ? "Good" : score >= 65 ? "Fair" : "Needs work");
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-
-  function words(text) { return text.split(",").map((word) => word.trim()).filter(Boolean); }
 
   async function check() {
     $("resume-check").disabled = true; $("resume-check-status").textContent = "Checking...";
     try {
       await kit.saveNow();
-      const report = await post("/api/resume/check", { resume: state.doc, job: $("resume-job").value, extra: words($("resume-extra").value) });
+      const report = await post("/api/resume/check", { resume: state.doc, job: $("resume-job").value, extra: kit.extraWords() });
       kit.emphasise = report.keywords ? report.keywords.required.matched : [];
       render(report);
       $("resume-check-status").textContent = "";
@@ -27,19 +26,24 @@
     $("resume-report").hidden = false;
     $("resume-score").textContent = `${grade(report.score)}: ${report.score} out of 100`;
     announce($("resume-score").textContent);
-    $("resume-cats").replaceChildren(...Object.values(report.categories).map(({ label, score }) => {
-      const row = make("li", "resume-cat"), bar = make("progress"); bar.max = 100; bar.value = score; bar.setAttribute("aria-label", `${label}: ${score} out of 100`);
-      row.append(make("span", "", `${label}: ${score} out of 100`), bar);
-      return row;
-    }));
+    $("resume-cats").replaceChildren(...bars(report.categories));
     $("resume-fixes").replaceChildren(...(report.checks.length ? report.checks.map(fix) : [make("li", "", "Nothing to fix.")]));
     $("resume-good").replaceChildren(...report.passed.map((text) => make("li", "", text)));
     keywords(report.keywords);
   }
 
+  function bars(categories) {  // an object of them (the data check) or a list (the PDF check)
+    return Object.values(categories).map(({ label, score }) => {
+      const row = make("li", "resume-cat"), bar = make("progress"); bar.max = 100; bar.value = score; bar.setAttribute("aria-label", `${label}: ${score} out of 100`);
+      row.append(make("span", "", `${label}: ${score} out of 100`), bar);
+      return row;
+    });
+  }
+
   function fix(check) {
     const row = make("li", "resume-fix");
     row.append(make("strong", "", `${SEVERITY[check.severity]}: `), document.createTextNode(`${check.message} `), make("span", "hint", check.fix));
+    if (!check.pointer) return row;  // a finding about the file as a whole has no box to go to
     const go = make("button", "btn btn-small", "Go to it"); go.type = "button"; go.setAttribute("aria-label", `Go to the place to fix this: ${check.message}`);
     go.addEventListener("click", () => { if (!kit.jump(check.pointer)) $("resume-check-status").textContent = "That place could not be found: it may have been removed."; });
     row.append(" ", go);
@@ -85,7 +89,32 @@
     } catch (error) { $("resume-check-status").textContent = error.message; }
   }
 
+  async function pdfCheck() {
+    $("resume-pdfcheck").disabled = true; $("resume-check-status").textContent = "Printing the PDF and reading it back...";
+    try {
+      await kit.saveNow();  // the PDF is printed from the saved resume
+      const report = await post("/api/resume/pdfcheck", { id: state.id });
+      renderPdf(report);
+      $("resume-check-status").textContent = "";
+      $("resume-pdf-score").focus();
+    } catch (error) { $("resume-check-status").textContent = error.message; } finally { $("resume-pdfcheck").disabled = false; }
+  }
+
+  function renderPdf(report) {
+    $("resume-pdf").hidden = false;
+    $("resume-pdf-score").textContent = `${report.label}: ${report.score} out of 100`;
+    announce($("resume-pdf-score").textContent);
+    $("resume-pdf-cats").replaceChildren(...bars(report.categories));
+    const found = [...report.findings, ...report.tips];
+    $("resume-pdf-fixes").replaceChildren(...(found.length ? found.map(fix) : [make("li", "", "Nothing to fix: a parser reads this PDF cleanly.")]));
+    $("resume-pdf-fields").replaceChildren(...(report.fields.length ? report.fields.map((f) => make("li", "", `${f.field}: ${f.value}: ${FIELD[f.status]}.`))
+      : [make("li", "", "Fill in your details to see what comes through.")]));
+    $("resume-pdf-text").textContent = report.text;
+  }
+
+  Object.assign(kit, { showDataReport: render, showPdfReport: renderPdf, findingRow: fix, bars });  // resume-ats.js shows the same rows and bars in its one answer
   $("resume-check").addEventListener("click", check);
+  $("resume-pdfcheck").addEventListener("click", pdfCheck);
   $("resume-copy").addEventListener("click", copy);
-  document.addEventListener("resume:opened", () => { kit.emphasise = []; $("resume-copy-name").value = ""; });
+  document.addEventListener("resume:opened", () => { kit.emphasise = []; $("resume-copy-name").value = ""; $("resume-pdf").hidden = true; });
 })();

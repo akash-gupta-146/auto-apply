@@ -6,9 +6,19 @@
   const { $, api, post, make, announce } = window.PanelKit;
   const AUTOSAVE_MS = 700, SURE_FOR_MS = 4000;
   const ACCENTS = [["#1f4e8c", "Blue"], ["#1e6b46", "Green"], ["#8a2b2b", "Red"], ["#5b3a8c", "Purple"], ["#2b2b2b", "Charcoal"], ["#0f6b7a", "Teal"]];
+  const ATS_LABEL = { compatible: "ATS-friendly", mostly: "Mostly ATS-friendly", not: "Not ATS-friendly yet" };
+  const MARKS = { compatible: "\u2714", mostly: "!", not: "\u2716", none: "\u2013" };  // a tick, an exclamation mark, a cross, a dash
   const state = { id: null, doc: null, pages: 0, overview: null, timer: null, saving: false, again: false, locked: false, dirty: false, armed: null };
-  const kit = window.ResumeKit = { state, ACCENTS, changed, saveNow, say };  // resume-form.js adds renderForm; resume-ai.js and resume-check.js add theirs
+  const kit = window.ResumeKit = { state, ACCENTS, changed, saveNow, say, open: openResume, atsChip, MARKS };  // resume-form.js adds renderForm; resume-ai.js and resume-check.js add theirs
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+  function atsChip(ats) {  // ats: what the last check of this resume said ({key, stale}), or nothing if it was never checked
+    const key = ats ? ats.key : "none", chip = make("span", "resume-chip"), mark = make("span", "", MARKS[key]);
+    mark.setAttribute("aria-hidden", "true");
+    chip.dataset.key = key;
+    chip.append(mark, ` ${ats ? ATS_LABEL[key] : "Not ATS-checked yet"}${ats && ats.stale ? " (out of date: edited since)" : ""}`);
+    return chip;
+  }
 
   function say(text) { $("resume-status").textContent = text; if (text) announce(text); }
   const templateName = (id) => ((state.overview.templates.find((t) => t.id === id)) || { name: id }).name;
@@ -26,6 +36,8 @@
     $("resume-empty").hidden = resumes.length > 0;
     $("resume-list").replaceChildren(...resumes.map(card));
     $("resume-new-upload").disabled = !uploaded;
+    $("resume-file-current").disabled = !uploaded;
+    $("resume-file-hint").textContent = uploaded ? `The resume your runs send now: ${uploaded}.` : "No resume is saved for your runs yet. Save one on the Profile tab, or choose a file below.";
     $("resume-upload-hint").textContent = uploaded ? `Reads ${uploaded}, the resume your runs send now, into a draft for you to check.`
       : hasProfile ? "Save a resume on the Profile tab to start from it." : "Save your details and a resume on the Profile tab to start from them.";
   }
@@ -41,8 +53,12 @@
     const del = make("button", "btn btn-small btn-danger", "Delete");
     del.type = "button"; del.setAttribute("aria-label", `Delete ${item.title}`);
     del.addEventListener("click", () => remove(item, del));
-    const buttons = make("div", "controls"); buttons.append(open, copy, del);
-    row.append(make("h3", "", item.title), make("p", "hint", [item.name || "No name yet", templateName(item.template), when && `edited ${when}`].filter(Boolean).join(" · ")), buttons);
+    const check = make("button", "btn btn-small", "Check ATS");
+    check.type = "button"; check.setAttribute("aria-label", `Run the ATS check on ${item.title}`);
+    check.addEventListener("click", () => kit.checkOne(item, row, check));
+    const buttons = make("div", "controls"); buttons.append(open, check, copy, del);
+    const ats = make("p", "hint"); ats.append("ATS check: ", atsChip(item.ats));
+    row.append(make("h3", "", item.title), make("p", "hint", [item.name || "No name yet", item.job && `for ${item.job}`, templateName(item.template), when && `edited ${when}`].filter(Boolean).join(" · ")), ats, buttons);
     return row;
   }
 
@@ -52,6 +68,14 @@
       say(mode === "upload" ? "Read your resume into a draft. Check each part below." : "Started a new resume.");
       await openResume(made.resume.id, made.notes);
     } catch (error) { fail(error); }
+  }
+
+  async function createForJob() {  // a draft from your details (or a blank one), and you are taken to the job box
+    await create(state.overview.has_profile ? "profile" : "blank");
+    if (!state.doc) return;  // it could not be made: create has said why
+    kit.showTab("job");
+    $("h-resume-job").focus();
+    say("Started a resume. Give the job here, to see how it lines up and tailor it.");
   }
 
   async function duplicate(id, title) {
@@ -102,7 +126,7 @@
 
   function fillChoices() {
     const { choices, templates } = state.overview;
-    options($("resume-template"), templates.map((t) => [t.id, t.ats_safe ? t.name : `${t.name}: less safe for applications`]), state.doc ? state.doc.template : "classic");
+    options($("resume-template"), templates.map((t) => [t.id, t.ats_safe ? `${t.name} (ATS-friendly)` : `${t.name} (not ATS-friendly)`]), state.doc ? state.doc.template : "classic");
     options($("resume-font"), choices.fonts.map((f) => [f, f === "sans" ? "Sans-serif (plain)" : "Serif (classic)"]), state.doc ? state.doc.theme.font : "sans");
     options($("resume-size"), choices.sizes.map((s) => [s, `${s} pt`]), state.doc ? state.doc.theme.size : 10.5);
     options($("resume-accent"), ACCENTS, state.doc ? state.doc.theme.accent : ACCENTS[0][0]);
@@ -124,7 +148,7 @@
 
   function noteTemplate() {
     const chosen = state.overview.templates.find((t) => t.id === state.doc.template);
-    $("resume-template-note").textContent = chosen.ats_safe ? chosen.about : `Less safe for applications. ${chosen.about}`;
+    $("resume-template-note").textContent = chosen.ats_safe ? `ATS-friendly. ${chosen.about}` : `Not ATS-friendly. ${chosen.about}`;
   }
 
   function wireControls() {
@@ -169,6 +193,7 @@
   function changed() {
     if (state.locked) return;
     state.dirty = true; setSaved("Changes not saved yet");
+    document.dispatchEvent(new CustomEvent("resume:edited"));  // resume-ats.js: the last ATS check is now out of date
     clearTimeout(state.timer);
     state.timer = setTimeout(save, AUTOSAVE_MS);
   }
@@ -237,6 +262,7 @@
   $("resume-new-blank").addEventListener("click", () => create("blank"));
   $("resume-new-profile").addEventListener("click", () => create("profile"));
   $("resume-new-upload").addEventListener("click", () => create("upload"));
+  $("resume-new-job").addEventListener("click", createForJob);
   $("resume-back").addEventListener("click", closeResume);
   $("resume-reload").addEventListener("click", () => openResume(state.id));
   $("resume-use-sure").addEventListener("change", () => { $("resume-use").disabled = !$("resume-use-sure").checked; });
