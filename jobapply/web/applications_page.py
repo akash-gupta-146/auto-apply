@@ -25,8 +25,8 @@ def _approval(token: str, asked: Mapping[str, Any]) -> str:
 <h2 id="h-approve">Waiting for your approval to send</h2>
 <p><strong>{escape(str(asked.get("job") or "An application"))}</strong> is filled in and ready. Nothing is sent until you say so.</p>
 <ul>{summary}</ul>
-<form method="post" action="/agent/approve">{_token(token)}<input type="hidden" name="session" value="{session}"><button type="submit">Approve and send</button></form>
-<form method="post" action="/agent/reject">{_token(token)}<input type="hidden" name="session" value="{session}"><button type="submit">Do not send</button></form>
+<form method="post" action="/agent/approve">{_token(token)}<input type="hidden" name="session" value="{session}"><button class="btn btn-primary" type="submit">Approve and send</button></form>
+<form method="post" action="/agent/reject">{_token(token)}<input type="hidden" name="session" value="{session}"><button class="btn" type="submit">Do not send</button></form>
 </section>"""
 
 
@@ -38,7 +38,7 @@ def _state(token: str, data: Mapping[str, Any]) -> str:
     job = f"<p>Job: <strong>{escape(str(state['job']))}</strong></p>" if state.get("job") else ""
     detail = f"<p>{escape(str(state['detail']))}</p>" if state.get("detail") else ""
     switch = (f'<form method="post" action="/agent/pause">{_token(token)}<input type="hidden" name="paused" value="{0 if paused else 1}">'
-              f'<button type="submit">{"Resume the agent" if paused else "Pause the agent"}</button></form>')
+              f'<button class="btn" type="submit">{"Resume the agent" if paused else "Pause the agent"}</button></form>')
     return f"""<section class="card" aria-labelledby="h-state">
 <h2 id="h-state">Right now</h2>
 <p role="status">The agent is: <strong>{escape(str(state.get("state", "Idle")))}</strong>{" (paused)" if paused and state.get("state") != "Paused" else ""}</p>

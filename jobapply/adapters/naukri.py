@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Iterator, List, Optional
+from typing import Callable, Iterator, List, Optional, Sequence
 
 from ..models import Job, JobCard, NotLoggedIn, NothingSent, Result, Status
 from .base import Adapter, first_visible, find_salary, slug
@@ -204,8 +204,9 @@ class NaukriAdapter(Adapter):
             self.check_challenge()
             ok = [c for c in calls if c.status == 200]
             failed = [c for c in calls if c.status >= 400]
-            if Drawer(self.active).is_open():
-                return self._run_chatbot(resolver)
+            known = [q for call in ok for q in apply_questions(self._body(call))]  # what Naukri says it will ask: the bar is found by it if its class names are not as guessed
+            if Drawer(self.active, known).is_open():
+                return self._run_chatbot(resolver, known)
             if first_visible(self.active, [SEL["dialog"]]) is not None:
                 self.capture_failure(JobCard(self.name, self.active.url, "unexpected dialog after Quick apply"))
                 raise RuntimeError("an unrecognised dialog appeared after Quick apply (page saved to data/failures)")
@@ -214,9 +215,8 @@ class NaukriAdapter(Adapter):
                 raise RuntimeError(f"the apply call failed: HTTP {failed[0].status}")
             if ok:
                 self._log_calls(calls)
-                questions = [q for call in ok for q in apply_questions(self._body(call))]
-                if questions:  # unsubmitted: they are answered in Naukri's side bar, which may take a moment to draw
-                    return self._await_drawer(resolver, questions)
+                if known:  # unsubmitted: they are answered in Naukri's side bar, which may take a moment to draw
+                    return self._await_drawer(resolver, known)
                 if self._verified_applied():
                     self.capture_failure(JobCard(self.name, self.active.url, "audit: after Quick apply"))
                     return Result(Status.APPLIED, "apply accepted and Naukri shows the job as applied")
@@ -260,10 +260,10 @@ class NaukriAdapter(Adapter):
     # -- Naukri's question side bar ---------------------------------------------------
     def _await_drawer(self, resolver, questions: List[str]) -> Result:
         """Naukri said it has screening questions. Its side bar draws a moment later (and not at all where its script is blocked)."""
-        drawer = Drawer(self.active)
+        drawer = Drawer(self.active, questions)
         for _ in range(DRAWER_POLLS):
             if drawer.is_open():
-                return self._run_chatbot(resolver)
+                return self._run_chatbot(resolver, questions)
             self.active.wait_for_timeout(500)
         self.capture_failure(JobCard(self.name, self.active.url, "questions came back but the question window never opened"))
         if self._chat_refused is not None:
@@ -281,22 +281,27 @@ class NaukriAdapter(Adapter):
         return (f", because your network refused Naukri's chat script (HTTP {self._chat_refused} from static.naukri.com). "
                 "Ask IT to allow static.naukri.com, or run Naukri from another network")
 
-    def _run_chatbot(self, resolver) -> Result:
+    def _run_chatbot(self, resolver, known: Sequence[str] = ()) -> Result:
         """Work through the side bar. If something in it is not as expected (no question to read, no text box, a question asked again, the bar
         gone but the job not applied) the page is saved first: the bar's markup has never been seen live (see naukri_chat.py), so the first
         time it opens is the evidence its selectors can be repaired from. Not having an answer is no failure and saves nothing."""
         try:
-            return self._chat_steps(resolver)
+            return self._chat_steps(resolver, known)
         except RuntimeError as exc:
             self.capture_failure(JobCard(self.name, self.active.url, f"question window: {exc}"))
             raise
 
-    def _chat_steps(self, resolver) -> Result:
-        drawer, last, repeats = Drawer(self.active), "", 0
+    def _chat_steps(self, resolver, known: Sequence[str] = ()) -> Result:
+        drawer, last, repeats, told = Drawer(self.active, known), "", 0, False
         for _ in range(MAX_CHAT_STEPS):
             self.check_challenge()
             if not drawer.is_open():  # it closes by itself after the last answer
                 return self._chat_finished()
+            if drawer.how and not told:  # the guessed class names did not match: say what the real ones are, so naukri_chat.SEL can be repaired
+                told = True
+                log.warning("Naukri's question window was read by the text of its questions, not by the class names in naukri_chat.py (they do not match it). "
+                            "What was found: %s. Put these in SEL, or run `jobapply probe naukri --chat` and keep the markup it saves.",
+                            "; ".join(f"{role}={what}" for role, what in drawer.how.items()))
             question = drawer.question()
             if not question:
                 self.active.wait_for_timeout(1000)
@@ -318,7 +323,7 @@ class NaukriAdapter(Adapter):
             """True when the question has an answer, or no longer needs one."""
             if not drawer.is_open():  # you answered the last question and the bar closed: there is nothing left to ask
                 return True
-            answer = resolver.resolve(question, options or None, read=lambda: drawer.given(options, said))
+            answer = resolver.resolve(question, options or None, read=lambda: drawer.given(options, said, question))
             if answer is not None and not drawer.moved_on(question, said):  # you may have answered it in the bar already
                 drawer.send(answer, bool(options))
             return answer is not None

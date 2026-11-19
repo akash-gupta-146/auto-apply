@@ -196,7 +196,7 @@ personal question (gender, race, disability, veteran status) is never guessed. E
 or here; either way it is saved as a normal answer, reused for the same question later, and shown to the AI for rephrasings. You can also use
 **Add a question and answer yourself** before a job asks, and edit or remove anything under **Your saved answers**. For a yes/no question write `Yes`
 or `No`; for choices, write one of the choices or a number. On **Naukri**, the question *side bar* is handled the same way, but
-**that part is not yet checked on the live site** (Naukri's question script is blocked on some networks, so its selectors are unverified). If it does not
+**that part is not yet checked on the live site** (Naukri's question script is blocked on some networks, so its selectors are unverified; if they miss, the bar is found by the text of its questions instead). If it does not
 open, the job is parked with its questions listed here. See
 [Answering a question right in the site's own form](README.md#answering-a-question-right-in-the-sites-own-form) and
 [Adding a question and answer yourself](README.md#adding-a-question-and-answer-yourself).

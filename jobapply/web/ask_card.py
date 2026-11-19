@@ -38,9 +38,9 @@ def render() -> str:
       </div>
       <form class="ask-form" id="ask-form">
         <label class="sr-only" for="ask-question">Your question</label>
-        <textarea id="ask-question" rows="2" maxlength="1000" placeholder="Ask about your applications, your details or what to do next"
+        <textarea class="materialize-textarea" id="ask-question" rows="2" maxlength="1000" placeholder="Ask about your applications, your details or what to do next"
                   aria-describedby="ask-hint ask-tip"></textarea>
-        <label class="check" for="ask-identity"><input id="ask-identity" type="checkbox"> Include my name, email and phone</label>
+        <label class="check" for="ask-identity"><input class="filled-in" id="ask-identity" type="checkbox"><span>Include my name, email and phone</span></label>
         <div class="controls">
           <button class="btn btn-primary" id="ask-send" type="submit">Ask</button>
           <button class="btn" id="ask-clear" type="button" hidden>Clear the conversation</button>

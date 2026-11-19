@@ -30,9 +30,18 @@ def _page(title: str, body: str) -> str:
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f'<title>{escape(title)}</title><link rel="stylesheet" href="/static/theme.css"></head><body>'
-        f'<nav class="top"><a href="/">&larr; Control panel</a></nav><main class="page">{body}</main></body></html>'
+        f'<title>{escape(title)}</title><link rel="stylesheet" href="/static/materialize.min.css">'
+        f'<link rel="stylesheet" href="/static/theme.css"></head><body>'
+        f'<nav class="top"><div class="top-bar"><span class="brand">Job Apply</span><a href="/">&larr; Control panel</a></div></nav>'
+        f'<main class="page">{body}</main></body></html>'
     )
+
+
+def _check(attrs: str, words: str, fid: str = "") -> str:
+    """A checkbox or radio as Materialize draws it: the input, then a span that holds the words and the box (it hides the input itself)."""
+    target = f' for="{fid}"' if fid else ""
+    kind = "with-gap" if 'type="radio"' in attrs else "filled-in"  # the look Materialize gives each: a filled box, a ring with a dot
+    return f'<label class="check"{target}><input class="{kind}" {attrs}><span>{words}</span></label>'
 
 
 def _token(token: str) -> str:
@@ -53,7 +62,7 @@ computer only; nothing is sent anywhere. I use it to pre-fill the next page.</p>
 {_token(token)}
 <label for="resume">Resume file (PDF, DOCX or TXT, up to 10 MB)</label>
 <input id="resume" name="resume" type="file" accept=".pdf,.docx,.txt" required>
-<button type="submit">Read my resume</button>
+<button class="btn btn-primary" type="submit">Read my resume</button>
 </form>
 </section>
 {edit}
@@ -65,8 +74,7 @@ def _field(spec: Field, values: Mapping[str, str], errors: Mapping[str, str]) ->
     label = escape(spec.label)
     if spec.kind == "checkbox":
         checked = " checked" if values.get(spec.name) else ""
-        return (f'<div class="check"><input id="{fid}" name="{spec.name}" type="checkbox"{checked}>'
-                f'<label for="{fid}">{label}</label></div>')
+        return _check(f'id="{fid}" name="{spec.name}" type="checkbox"{checked}', label, fid)
     described = [i for i, present in ((f"{fid}-hint", spec.hint), (f"{fid}-err", spec.name in errors)) if present]
     attrs = (f' aria-describedby="{" ".join(described)}"' if described else "")
     attrs += ' aria-invalid="true"' if spec.name in errors else ""
@@ -79,7 +87,7 @@ def _field(spec: Field, values: Mapping[str, str], errors: Mapping[str, str]) ->
     error = f'<p class="error" id="{fid}-err">{escape(errors[spec.name])}</p>' if spec.name in errors else ""
     if spec.kind == "textarea":
         return (f'<label for="{fid}">{label}{mark}</label>'
-                f'<textarea id="{fid}" name="{spec.name}" rows="6"{attrs}>{value}</textarea>{hint}{error}')
+                f'<textarea class="materialize-textarea" id="{fid}" name="{spec.name}" rows="6"{attrs}>{value}</textarea>{hint}{error}')
     if spec.kind == "password":  # a saved key is never sent back to the page
         value, attrs = "", attrs + ' autocomplete="off"'
     return (f'<label for="{fid}">{label}{mark}</label>'
@@ -107,7 +115,7 @@ def _skills(rows: Sequence[Tuple[str, str]], errors: Mapping[str, str], focus_la
 answers given when an application asks "years of experience in ..."; a skill you do not list is never answered, so
 nothing is made up. To remove a skill, clear its name and years.</p>
 <div class="skills">{"".join(cells)}</div>
-<button type="submit" name="{ADD_SKILL}" value="1" formnovalidate>Add another skill</button>
+<button class="btn" type="submit" name="{ADD_SKILL}" value="1" formnovalidate>Add another skill</button>
 </fieldset>"""
 
 
@@ -140,11 +148,11 @@ def _ai_fill(provider: str) -> str:
     """The AI Fill card. provider is the name of the AI that will read the resume, or empty when none is set up."""
     if not provider:
         return ('<fieldset class="aifill"><legend>Fill it in from your resume</legend>'
-                '<button type="submit" name="ai_fill" value="1" formnovalidate disabled aria-describedby="aifill-hint">AI Fill</button>'
+                '<button class="btn" type="submit" name="ai_fill" value="1" formnovalidate disabled aria-describedby="aifill-hint">AI Fill</button>'
                 '<p class="hint" id="aifill-hint">To use this, <a href="/ai">set up the AI helper</a> first (an AI, a model and a key).</p>'
                 "</fieldset>")
     return ('<fieldset class="aifill"><legend>Fill it in from your resume</legend>'
-            '<button type="submit" name="ai_fill" value="1" formnovalidate aria-describedby="aifill-hint">AI Fill</button>'
+            '<button class="btn" type="submit" name="ai_fill" value="1" formnovalidate aria-describedby="aifill-hint">AI Fill</button>'
             '<p class="hint" id="aifill-hint">An AI reads your resume and fills the <strong>empty</strong> boxes below: your '
             "details, job titles, keywords and skills. It must back every suggestion with words from your resume, and it "
             "never changes what you have typed. Check what it fills before you save. This sends the text of your resume "
@@ -171,7 +179,7 @@ I filled in what I could read from it, and left blank what it does not say: plea
 <fieldset><legend>About you</legend>{about}</fieldset>
 <fieldset><legend>Which jobs to apply for</legend>{wanted}</fieldset>
 {_skills(skill_rows, errors, focus_new_skill)}
-<button type="submit">Save my profile</button>
+<button class="btn btn-primary" type="submit">Save my profile</button>
 </form>""")
 
 
@@ -195,8 +203,8 @@ def _provider_choices(chosen: str, errors: Mapping[str, str], providers: Mapping
         else:  # one the person added: we only know its address
             hint = f"Added by you. Address: <code>{escape(provider.base_url)}</code>"
         rows.append(
-            f'<div class="check"><input id="p-{key}" name="provider" type="radio" value="{key}"{checked}{required}>'
-            f'<label for="p-{key}">{escape(provider.label)}</label></div><p class="hint">{hint}</p>')
+            _check(f'id="p-{key}" name="provider" type="radio" value="{key}"{checked}{required}', escape(provider.label), f"p-{key}")
+            + f'<p class="hint">{hint}</p>')
     error = f'<p class="error">{escape(errors["provider"])}</p>' if "provider" in errors else ""
     warning = ('<p class="hint"><strong>These are developer keys, not your chat subscription.</strong> A ChatGPT Plus or '
                'Claude Pro plan does not include one. Each company bills its own key separately, so check its pricing '
@@ -222,7 +230,7 @@ def _backups(values: Mapping[str, str], errors: Mapping[str, str], saved: AiSett
                    if name_provider in errors else "")
         rows.append(
             f'<fieldset><legend>Backup {slot}</legend><label for="f-{name_provider}">Which AI</label>'
-            f'<select id="f-{name_provider}" name="{name_provider}">{options}</select>{problem}'
+            f'<select class="browser-default" id="f-{name_provider}" name="{name_provider}">{options}</select>{problem}'
             f'{_field(Field(name_model, "Model name"), values, errors)}'
             f'{_field(Field(name_key, "API key", "password", hint=key_hint), values, errors)}</fieldset>')
     about = help_button("backups", "backup AIs",
@@ -240,7 +248,7 @@ def _custom_providers(token: str, saved: AiSettings, values: Mapping[str, str], 
         f'<li>{escape(custom.label)} <code>{escape(custom.base_url)}</code>'
         f'<form method="post" action="/ai/provider/remove" class="inline">{_token(token)}'
         f'<input type="hidden" name="id" value="{escape(key, quote=True)}">'
-        f'<button class="small" type="submit" aria-label="Remove {escape(custom.label, quote=True)}">Remove</button></form></li>'
+        f'<button class="btn btn-small btn-danger" type="submit" aria-label="Remove {escape(custom.label, quote=True)}">Remove</button></form></li>'
         for key, custom in saved.custom.items())
     chosen_style = values.get("custom_style", "openai")
     styles = "".join(f'<option value="{key}"{" selected" if key == chosen_style else ""}>{escape(text)}</option>'
@@ -259,9 +267,9 @@ def _custom_providers(token: str, saved: AiSettings, values: Mapping[str, str], 
             f'<form method="post" action="/ai/provider">{_token(token)}'
             f'{_field(Field("custom_name", "Name", required=True, hint="Anything you will recognise, for example My company AI."), values, errors)}'
             f'{_field(Field("custom_url", "Address", required=True, hint="The API address, up to but not including /chat/completions. For example https://api.groq.com/openai/v1"), values, errors)}'
-            f'<label for="f-custom_style">Format it speaks</label><select id="f-custom_style" name="custom_style">{styles}</select>{style_error}'
+            f'<label for="f-custom_style">Format it speaks</label><select class="browser-default" id="f-custom_style" name="custom_style">{styles}</select>{style_error}'
             f'{_field(Field("custom_needs_key", "It needs an API key", "checkbox"), needs_key, errors)}'
-            '<button type="submit">Add this AI</button></form></section>')
+            '<button class="btn btn-primary" type="submit">Add this AI</button></form></section>')
 
 
 def _documents(token: str, names: List[str]) -> str:
@@ -270,7 +278,7 @@ def _documents(token: str, names: List[str]) -> str:
     items = "".join(
         f'<li>{escape(name)}<form method="post" action="/ai/remove" class="inline">{_token(token)}'
         f'<input type="hidden" name="name" value="{escape(name, quote=True)}">'
-        f'<button class="small" type="submit" aria-label="Remove {escape(name, quote=True)}">Remove</button></form></li>'
+        f'<button class="btn btn-small btn-danger" type="submit" aria-label="Remove {escape(name, quote=True)}">Remove</button></form></li>'
         for name in names)
     return f"<ul>{items}</ul>"
 
@@ -344,14 +352,14 @@ those questions for you.</p>
 <input id="f-about_file" name="about_file" type="file" accept=".pdf,.docx,.txt">
 <p class="hint">For example your LinkedIn &ldquo;Save to PDF&rdquo;. To add several, save once per file.</p>{file_error}
 {fields["notes"]}</fieldset>
-<button type="submit">Save</button>
+<button class="btn btn-primary" type="submit">Save</button>
 </form>
 {_custom_providers(token, saved, values, errors)}
 <section>
 <h2>Check that it works</h2>
 <p>Save first, then test. This sends one tiny message to each AI you set up, the main one and any backups, and says which
 work. None of your documents are sent.</p>
-<form method="post" action="/ai/test">{_token(token)}<button type="submit">Test the connection</button></form>
+<form method="post" action="/ai/test">{_token(token)}<button class="btn" type="submit">Test the connection</button></form>
 </section>
 <p><a href="/">Back to the control panel</a></p>""")
 
@@ -364,10 +372,10 @@ def _question(item: Mapping[str, object], index: int) -> str:
     options = item["options"]
     if options:
         controls = "".join(
-            f'<div class="check"><input type="radio" id="q{index}-{n}" name="{name}" value="{escape(str(option), quote=True)}">'
-            f'<label for="q{index}-{n}">{escape(str(option))}</label></div>' for n, option in enumerate(options))
+            _check(f'type="radio" id="q{index}-{n}" name="{name}" value="{escape(str(option), quote=True)}"', escape(str(option)), f"q{index}-{n}")
+            for n, option in enumerate(options))
         return f"<fieldset><legend>{escape(str(item['raw']))}{where}</legend>{controls}</fieldset>"
-    return (f'<div class="field"><label for="q{index}">{escape(str(item["raw"]))}{where}</label>'
+    return (f'<div class="field"><label class="ask" for="q{index}">{escape(str(item["raw"]))}{where}</label>'
             f'<input id="q{index}" name="{name}" type="text" maxlength="{MAX_ANSWER_CHARS}"></div>')
 
 
@@ -380,9 +388,9 @@ def _saved_row(token: str, index: int, question: str, answer: str) -> str:
         f'<form method="post" action="/questions/edit">{_token(token)}{hidden}'
         f'<input type="text" name="answer" id="edit-{index}" value="{escape(answer, quote=True)}" maxlength="{MAX_ANSWER_CHARS}"'
         f' aria-label="Your answer to: {asked}">'
-        f'<button type="submit" class="small">Save</button></form></details></div>'
+        f'<button type="submit" class="btn btn-small">Save</button></form></details></div>'
         f'<form method="post" action="/questions/forget">{_token(token)}{hidden}'
-        f'<button type="submit" class="small" aria-label="Remove my saved answer to: {asked}">Remove</button></form></li>')
+        f'<button type="submit" class="btn btn-small btn-danger" aria-label="Remove my saved answer to: {asked}">Remove</button></form></li>')
 
 
 def _guess_row(token: str, guess) -> str:
@@ -394,9 +402,9 @@ def _guess_row(token: str, guess) -> str:
         f'<li><div class="what"><span class="q">{escape(guess.question)}</span><br><em>{escape(guess.answer)}</em>'
         f'{f" <small>({origin})</small>" if origin else ""}</div>'
         f'<form method="post" action="/questions/guess/keep">{_token(token)}{hidden}'
-        f'<button type="submit" class="small" aria-label="Keep the guess as my answer to: {asked}">Keep as my answer</button></form>'
+        f'<button type="submit" class="btn btn-small" aria-label="Keep the guess as my answer to: {asked}">Keep as my answer</button></form>'
         f'<form method="post" action="/questions/guess/forget">{_token(token)}{hidden}'
-        f'<button type="submit" class="small" aria-label="Forget the guess for: {asked}">Forget</button></form></li>')
+        f'<button type="submit" class="btn btn-small btn-danger" aria-label="Forget the guess for: {asked}">Forget</button></form></li>')
 
 
 def _guessed_answers(token: str, guesses: Sequence) -> str:
@@ -460,9 +468,9 @@ drop-downs and text boxes alike. Answer only what is true for you. (Naukri's own
 <input id="add-question" name="question" type="text" maxlength="{MAX_QUESTION_CHARS}" required value="{escape(question, quote=True)}">
 <p class="hint">Copy it from the form if you can: the same words are answered with no AI at all.</p></div>
 <div class="field"><label for="add-answer">Your answer</label>
-<textarea id="add-answer" name="answer" rows="3" maxlength="{MAX_ANSWER_CHARS}" required>{escape(answer)}</textarea>
+<textarea class="materialize-textarea" id="add-answer" name="answer" rows="3" maxlength="{MAX_ANSWER_CHARS}" required>{escape(answer)}</textarea>
 <p class="hint">How to write it for a text box, radio buttons, tick boxes or a drop-down {help_button("how-to-answer", "how to write your answer", HOW_TO_ANSWER)}</p></div>
-<button type="submit">Add this answer</button>
+<button class="btn btn-primary" type="submit">Add this answer</button>
 </form>
 </section>"""
 
@@ -475,7 +483,7 @@ def questions_page(token: str, items: Sequence[Mapping[str, object]], banner: Tu
     if items:
         body = (f'<form method="post" action="/questions/save">{_token(token)}'
                 + "".join(_question(item, index) for index, item in enumerate(items))
-                + '<button type="submit">Save my answers</button></form>')
+                + '<button class="btn btn-primary" type="submit">Save my answers</button></form>')
     else:
         body = "<p>Nothing is waiting for you. When a job asks something your profile cannot answer, it shows up here.</p>"
     return _page("Questions waiting for you", f"""
@@ -502,5 +510,5 @@ You can change them any time.</p>
 <h2>What to do next</h2>
 <p>Go back to the control panel. It shows the next step for you: open the browser, log in to Naukri, check it can see
 jobs, rehearse, then apply.</p>
-<p><a class="button" href="/">Back to the control panel</a></p>
+<p><a class="btn" href="/">Back to the control panel</a></p>
 </section>""")

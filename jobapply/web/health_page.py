@@ -30,7 +30,7 @@ def _fix(token: str, action: str, question: str, label: str, about: str) -> str:
     """One button: it names the saved question it is about, and the server works out what to do from what is saved."""
     return (f'<form method="post" action="/answers/health/{action}">{_token(token)}'
             f'<input type="hidden" name="question" value="{escape(question, quote=True)}">'
-            f'<button type="submit" class="small" aria-label="{escape(label + ": " + about, quote=True)}">{escape(label)}</button></form>')
+            f'<button type="submit" class="btn btn-small" aria-label="{escape(label + ": " + about, quote=True)}">{escape(label)}</button></form>')
 
 
 def _conflicts(token: str, found: Sequence[Conflict], has_profile: bool) -> str:
@@ -43,7 +43,7 @@ def _conflicts(token: str, found: Sequence[Conflict], has_profile: bool) -> str:
     rows = "".join(
         f'<li class="decide"><div class="what"><span class="q">{escape(c.question)}</span><br>You saved: <strong>{escape(c.saved)}</strong>'
         f'<br>Your profile says: <strong>{escape(c.profile)}</strong></div>'
-        f'<div class="row">{_fix(token, "profile", c.question, "Use my profile", c.question)}'
+        f'<div class="choices">{_fix(token, "profile", c.question, "Use my profile", c.question)}'
         f'{_fix(token, "keep", c.question, "Keep my saved answer", c.question)}</div></li>' for c in found)
     return f"""<section aria-labelledby="h-conflicts"><h2 id="h-conflicts">Disagreeing with your profile ({len(found)})</h2>
 <p>A run uses the saved answer, so a form that words the question differently can send something else. Choose which one is right.

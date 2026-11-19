@@ -19,6 +19,7 @@ from .base import first_visible
 from .naukri import DRAWER_POLLS, SEL, NaukriAdapter
 from .naukri_api import apply_questions
 from .naukri_chat import SEL as BAR_SEL, Drawer
+from .naukri_chat_find import TAGGED
 
 CONTAINER_JS = "() => { const box = document.querySelector('#desktopChatBotContainer'); return box ? box.innerHTML : ''; }"
 NOTHING_DRAWN = "<!-- the bar selector matched nothing and #desktopChatBotContainer is empty: nothing was drawn -->"
@@ -37,6 +38,7 @@ class BarReport:
     question: str = ""  # the question the bar showed first
     options: List[str] = dataclasses.field(default_factory=list)
     markup: Optional[Path] = None  # the bar's own markup, saved
+    by_text: Dict[str, str] = dataclasses.field(default_factory=dict)  # the bar was found by the text of its questions, not by SEL: what was found, as tag#id.class
 
     def lines(self) -> List[str]:
         out = [f"Naukri question side bar probe: {self.url}"]
@@ -48,6 +50,9 @@ class BarReport:
         if self.matches:
             out.append("  what each selector finds on the page: " + ", ".join(f"{name}={count}" for name, count in self.matches.items()))
             out += [f"  PROBLEM: '{name}' matched nothing: {why}. Repair SEL['{name}'] in naukri_chat.py from the saved markup." for name, why in MUST_MATCH.items() if not self.matches.get(name)]
+        if self.by_text:
+            out.append("  SEL missed the bar, but it WAS found by the text of its questions, so answering works. To make the guesses right, put these in naukri_chat.SEL: "
+                       + ", ".join(f"{role}={what}" for role, what in self.by_text.items()))
         if self.question:
             out.append(f"  the first question it read: {self.question[:100]!r}" + (f" with choices {self.options}" if self.options else " (a text answer)"))
         if self.markup:
@@ -85,12 +90,13 @@ def probe_bar(adapter: NaukriAdapter, url: str) -> BarReport:
         report.pressed = True
         drawer = Drawer(adapter.active)
         for _ in range(DRAWER_POLLS):
+            drawer.known = _asked(adapter, calls)  # once Naukri's reply is in, a bar SEL does not match is looked for by its questions
             if drawer.is_open():
                 break
             adapter.active.wait_for_timeout(500)
         report.opened, report.refused = drawer.is_open(), adapter._chat_refused
         replies = [call for call in calls if call.status == 200]
-        report.questions = [q for call in replies for q in apply_questions(adapter._body(call))]
+        report.questions = _asked(adapter, calls)
         if replies and not report.questions and not report.opened:
             report.note = "WARNING: Naukri accepted the press with no questions, so the application may have been SENT. Check Naukri's Applied jobs."
         _look(adapter, drawer, report)
@@ -101,6 +107,11 @@ def probe_bar(adapter: NaukriAdapter, url: str) -> BarReport:
     return report
 
 
+def _asked(adapter: NaukriAdapter, calls: list) -> List[str]:
+    """The questions Naukri's replies to Quick apply say it will ask."""
+    return [q for call in calls if call.status == 200 for q in apply_questions(adapter._body(call))]
+
+
 def _look(adapter: NaukriAdapter, drawer: Drawer, report: BarReport) -> None:
     """What the page holds, as far as it can be read; each look is kept even if another fails."""
     for name, selector in BAR_SEL.items():
@@ -109,6 +120,7 @@ def _look(adapter: NaukriAdapter, drawer: Drawer, report: BarReport) -> None:
         except Exception:
             report.matches[name] = 0
     if report.opened:
+        report.by_text = dict(drawer.how) if drawer.found_by_text() else {}
         for attempt in (lambda: setattr(report, "question", drawer.question()), lambda: setattr(report, "options", drawer.options())):
             try:
                 attempt()
@@ -121,7 +133,8 @@ def _look(adapter: NaukriAdapter, drawer: Drawer, report: BarReport) -> None:
     try:
         # The bar is added late in the page, which the saved page may cut off, so its markup is kept apart: the bar itself if the selector finds it,
         # else whatever fills the container where it is expected (which is exactly what shows a wrong selector).
-        markup = adapter.active.locator(BAR_SEL["bar"]).first.evaluate("e => e.outerHTML") if report.matches.get("bar") else adapter.active.evaluate(CONTAINER_JS)
+        bar = BAR_SEL["bar"] if report.matches.get("bar") else TAGGED["bar"] if report.by_text else ""
+        markup = adapter.active.locator(bar).first.evaluate("e => e.outerHTML") if bar else adapter.active.evaluate(CONTAINER_JS)
         folder.mkdir(parents=True, exist_ok=True)
         report.markup = folder / f"{adapter.name}-bar-{int(time.time())}.html"
         report.markup.write_text(markup or NOTHING_DRAWN, encoding="utf-8")

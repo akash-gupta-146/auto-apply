@@ -18,8 +18,8 @@ WARNING = ("Some job sites forbid automated applications and can restrict an acc
 
 def _sites(sites: Mapping[str, str], notes: Mapping[str, str]) -> str:
     options = "".join(
-        f'<label class="check"><input type="radio" name="auto-portal" value="{key}" data-label="{escape(label, quote=True)}"'
-        f' data-note="{escape(notes.get(key, ""), quote=True)}"{" checked" if n == 0 else ""}> {escape(label)}</label>'
+        f'<label class="check"><input class="with-gap" type="radio" name="auto-portal" value="{key}" data-label="{escape(label, quote=True)}"'
+        f' data-note="{escape(notes.get(key, ""), quote=True)}"{" checked" if n == 0 else ""}><span>{escape(label)}</span></label>'
         for n, (key, label) in enumerate(sites.items()))
     return f'<fieldset class="field auto-sites"><legend>Which site?</legend><div class="site-options">{options}</div></fieldset>'
 
@@ -44,17 +44,17 @@ def render(sites: Mapping[str, str], notes: Mapping[str, str], ai_disclosure: st
       <input id="auto-count" type="number" min="1" max="500" value="{DEFAULT_COUNT}" inputmode="numeric" aria-describedby="auto-count-hint"></div>
       <p class="hint" id="auto-count-hint"></p>
       <fieldset class="field"><legend>How should it work?</legend>
-        <label class="check"><input type="radio" name="auto-mode" id="auto-ask" value="ask" checked aria-describedby="auto-ask-hint"> Ask me before each application (recommended)</label>
+        <label class="check"><input class="with-gap" type="radio" name="auto-mode" id="auto-ask" value="ask" checked aria-describedby="auto-ask-hint"><span>Ask me before each application (recommended)</span></label>
         <p class="hint" id="auto-ask-hint">It shows you the job and why it fits, here. It applies only after you press Apply; Skip moves on and remembers.
         If nobody answers two jobs in a row, it stops.</p>
-        <label class="check"><input type="radio" name="auto-mode" id="auto-direct" value="direct" aria-describedby="auto-direct-hint"> Apply by itself</label>
+        <label class="check"><input class="with-gap" type="radio" name="auto-mode" id="auto-direct" value="direct" aria-describedby="auto-direct-hint"><span>Apply by itself</span></label>
         <p class="hint" id="auto-direct-hint">It sends every application that fits, without asking. You can still Pause or Stop.</p>
       </fieldset>
       <div id="auto-direct-options" hidden>
         <div class="field"><label for="auto-confirm">Type YES to allow sending without asking</label>
         <input id="auto-confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
       </div>
-      <label class="check" for="auto-ai"><input id="auto-ai" type="checkbox" aria-describedby="auto-ai-hint"> Use the AI helper for questions I have not answered</label>
+      <label class="check" for="auto-ai"><input class="filled-in" id="auto-ai" type="checkbox" aria-describedby="auto-ai-hint"><span>Use the AI helper for questions I have not answered</span></label>
       <p class="hint" id="auto-ai-hint">Answers only from your own documents, and says so when it cannot. {ai_disclosure}</p>
       <p class="hint">{escape(WARNING)}</p>
       <div class="controls">
@@ -96,8 +96,8 @@ def render(sites: Mapping[str, str], notes: Mapping[str, str], ai_disclosure: st
     <section class="card" id="auto-history" aria-labelledby="h-auto-history">
       <h2 id="h-auto-history" tabindex="-1">What happened</h2>
       <div class="auto-filters" role="search" aria-label="Narrow the list">
-        <div class="field"><label for="auto-f-group">Outcome</label><select id="auto-f-group">{_outcomes()}</select></div>
-        <div class="field"><label for="auto-f-days">When</label><select id="auto-f-days">
+        <div class="field"><label for="auto-f-group">Outcome</label><select class="browser-default" id="auto-f-group">{_outcomes()}</select></div>
+        <div class="field"><label for="auto-f-days">When</label><select class="browser-default" id="auto-f-days">
           <option value="0">Any time</option><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></div>
         <div class="field"><label for="auto-f-text">Company or job</label><input id="auto-f-text" type="search" autocomplete="off" spellcheck="false"></div>
       </div>

@@ -3,7 +3,7 @@
    Everything from the server is shown as TEXT, never as HTML. The resume you are editing lives in `kit.state.doc`; the text boxes
    (resume-form.js) change it in place and say so with kit.changed(), and it is saved a moment after you stop typing. */
 (() => {
-  const { $, api, post, make, announce } = window.PanelKit;
+  const { $, api, post, make, check, announce } = window.PanelKit;
   const AUTOSAVE_MS = 700, SURE_FOR_MS = 4000;
   const ACCENTS = [["#1f4e8c", "Blue"], ["#1e6b46", "Green"], ["#8a2b2b", "Red"], ["#5b3a8c", "Purple"], ["#2b2b2b", "Charcoal"], ["#0f6b7a", "Teal"]];
   const ATS_LABEL = { compatible: "ATS-friendly", mostly: "Mostly ATS-friendly", not: "Not ATS-friendly yet" };
@@ -164,7 +164,6 @@
     $("resume-sections").replaceChildren(...doc.order.map((key, at) => {
       const row = make("li", "resume-section-row"), name = headings[key], shown = !doc.hidden.includes(key);
       const box = make("input"); box.type = "checkbox"; box.id = `resume-show-${key}`; box.checked = shown; box.dataset.key = `section.${key}.show`;
-      const label = make("label", "", `Show ${name}`); label.htmlFor = box.id;
       box.addEventListener("change", () => {
         doc.hidden = box.checked ? doc.hidden.filter((k) => k !== key) : [...doc.hidden, key];
         changed(); announce(`${name} ${box.checked ? "will be shown" : "is hidden"}.`);
@@ -181,8 +180,7 @@
         });
         return button;
       };
-      const check = make("div", "check"); check.append(box, label);
-      row.append(check, move(-1, "Up"), move(1, "Down"));
+      row.append(check(box, `Show ${name}`), move(-1, "Up"), move(1, "Down"));
       return row;
     }));
   }

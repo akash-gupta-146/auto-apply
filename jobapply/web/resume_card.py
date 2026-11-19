@@ -73,14 +73,14 @@ def render() -> str:
             <p class="hint" id="resume-ai-note">{AI_NOTE}</p>
             <p class="hint" id="resume-ai-off" hidden>The AI helper is not set up, so the AI buttons are switched off. The rest works without it.</p>
             <details class="resume-block" open><summary>Look</summary>
-              <div class="field"><label for="resume-template">Template</label><select id="resume-template" data-pointer="/template"></select></div>
+              <div class="field"><label for="resume-template">Template</label><select class="browser-default" id="resume-template" data-pointer="/template"></select></div>
               <p class="hint" id="resume-template-note"></p>
               <div class="resume-look">
-                <div class="field"><label for="resume-font">Font</label><select id="resume-font"></select></div>
-                <div class="field"><label for="resume-size">Size (points)</label><select id="resume-size"></select></div>
-                <div class="field"><label for="resume-accent">Accent colour</label><select id="resume-accent"></select></div>
-                <div class="field"><label for="resume-spacing">Spacing</label><select id="resume-spacing" data-pointer="/theme/spacing"></select></div>
-                <div class="field"><label for="resume-page">Paper</label><select id="resume-page"></select></div>
+                <div class="field"><label for="resume-font">Font</label><select class="browser-default" id="resume-font"></select></div>
+                <div class="field"><label for="resume-size">Size (points)</label><select class="browser-default" id="resume-size"></select></div>
+                <div class="field"><label for="resume-accent">Accent colour</label><select class="browser-default" id="resume-accent"></select></div>
+                <div class="field"><label for="resume-spacing">Spacing</label><select class="browser-default" id="resume-spacing" data-pointer="/theme/spacing"></select></div>
+                <div class="field"><label for="resume-page">Paper</label><select class="browser-default" id="resume-page"></select></div>
               </div>
             </details>
             <details class="resume-block" open><summary>Sections: show, hide and put in order</summary>
@@ -116,7 +116,7 @@ def render() -> str:
         <div class="field"><label for="resume-job-title">Job title (optional)</label>
         <input id="resume-job-title" type="text" maxlength="80" autocomplete="off"></div>
         <div class="field"><label for="resume-job">The job description</label>
-        <textarea id="resume-job" rows="8" maxlength="20000" spellcheck="false" aria-describedby="resume-job-hint"></textarea></div>
+        <textarea class="materialize-textarea" id="resume-job" rows="8" maxlength="20000" spellcheck="false" aria-describedby="resume-job-hint"></textarea></div>
         <p class="hint" id="resume-job-hint">Paste it here, or read it with a button above and then trim what is not the description. Skills it only prefers (\"nice to have\") cost you
         nothing. Nothing is added to your resume for you: you decide what is true.</p>
         <div class="field"><label for="resume-extra">Other words to look for (optional, separated by commas)</label>
@@ -145,9 +145,9 @@ def render() -> str:
         <h2 id="h-resume-tailor" tabindex="-1">Tailor it to the job</h2>
         <p>You get a short list of small changes, each shown as before and after with the reason. Accept the ones that are true of you. They go into a new copy named for
         the job: the resume you are editing does not change, and nothing is added that your resume does not already say.</p>
-        <div class="field"><label for="resume-strength">How much to change</label><select id="resume-strength" aria-describedby="resume-strength-note"></select></div>
+        <div class="field"><label for="resume-strength">How much to change</label><select class="browser-default" id="resume-strength" aria-describedby="resume-strength-note"></select></div>
         <p class="hint" id="resume-strength-note"></p>
-        <label class="check" for="resume-tailor-ai"><input type="checkbox" id="resume-tailor-ai" checked> Ask the AI helper too</label>
+        <label class="check" for="resume-tailor-ai"><input class="filled-in" type="checkbox" id="resume-tailor-ai" checked><span>Ask the AI helper too</span></label>
         <p class="hint" id="resume-tailor-ai-note">Sends the text of your bullets (no name, contact details or employer names) and the job description to the AI you chose. Without
         it, the only change offered is putting the skills the job asks for first.</p>
         <div class="controls"><button class="btn btn-primary" type="button" id="resume-tailor-go">Suggest changes</button></div>
@@ -214,7 +214,7 @@ def render() -> str:
         <p id="resume-use-now"></p>
         <p>This prints the resume as a PDF and makes it the resume your runs send (the one on the Profile tab). Skills it mentions that are not in your profile are
         added there with no years, never with numbers made up for you. Your earlier resume file stays in the data folder.</p>
-        <label class="check" for="resume-use-sure"><input type="checkbox" id="resume-use-sure"> Yes, use this resume from now on</label>
+        <label class="check" for="resume-use-sure"><input class="filled-in" type="checkbox" id="resume-use-sure"><span>Yes, use this resume from now on</span></label>
         <div class="controls"><button class="btn btn-primary" type="button" id="resume-use" disabled>Use this resume</button></div>
         <p id="resume-use-status" role="status"></p>
       </section>

@@ -21,9 +21,9 @@
 
   function form(skill, row, opener) {
     const box = make("div", "resume-ai"), id = `resume-enrich-${skill.replace(/[^a-z0-9]/gi, "-")}`;
-    const said = make("textarea"), label = make("label", "", `What have you done with ${skill}? Say it in your own words, one or two lines.`);
+    const said = make("textarea", "materialize-textarea"), label = make("label", "", `What have you done with ${skill}? Say it in your own words, one or two lines.`);
     said.id = id; said.rows = 3; said.maxLength = 400; label.htmlFor = id;
-    const where = make("select"), whereLabel = make("label", "", "Add it as a bullet to"); where.id = `${id}-where`; whereLabel.htmlFor = where.id;
+    const where = make("select", "browser-default"), whereLabel = make("label", "", "Add it as a bullet to"); where.id = `${id}-where`; whereLabel.htmlFor = where.id;
     state.doc.experience.forEach((job, n) => { const option = make("option", "", [job.title, job.company].filter(Boolean).join(", ") || `Job ${n + 1}`); option.value = String(n); where.append(option); });
     const status = make("p", "", ""); status.setAttribute("role", "status");
     const host = make("div");

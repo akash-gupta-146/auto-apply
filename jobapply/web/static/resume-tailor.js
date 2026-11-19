@@ -3,7 +3,7 @@
    into a NEW copy named for the job, and the resume you are editing does not change. The server checks every change again when you ask for the copy.
    Everything from the server is shown as TEXT. */
 (() => {
-  const { $, make, post, announce } = window.PanelKit;
+  const { $, make, check, post, announce } = window.PanelKit;
   const kit = window.ResumeKit, { state } = kit;
   let offered = [];
 
@@ -38,10 +38,10 @@
   }
 
   function item(change) {
-    const row = make("li", "resume-change"), box = make("input"), label = make("label", "", `Accept: ${change.label}`), head = make("div", "resume-change-head");
-    box.type = "checkbox"; box.id = `resume-change-${change.id}`; label.htmlFor = box.id;
+    const row = make("li", "resume-change"), box = make("input"), head = make("div", "resume-change-head");
+    box.type = "checkbox"; box.id = `resume-change-${change.id}`;
     box.addEventListener("change", count);
-    head.append(box, label);
+    head.append(check(box, `Accept: ${change.label}`));
     row.append(head);
     if (change.action === "replace") row.append(kit.difference(change.original, change.value));
     else if (change.action === "append") { const added = make("p", "diff"); added.append("New bullet: ", make("ins", "", change.value)); row.append(added); }

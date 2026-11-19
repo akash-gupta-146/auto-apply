@@ -41,8 +41,17 @@
     return element;
   }
 
+  // A checkbox as Materialize draws it: a label holding the input and then a span of words (the span draws the box; the input itself is hidden).
+  function check(box, words) {
+    const label = make("label", "check"), text = typeof words === "string" ? make("span", "", words) : words;
+    box.classList.add(box.type === "radio" ? "with-gap" : "filled-in");  // the look Materialize gives each: a filled box, a ring with a dot
+    if (box.id) label.htmlFor = box.id;
+    label.append(box, text);
+    return label;
+  }
+
   // What the other scripts on this page (the Auto fill form tab, the tabs) may use: no globals beyond this one.
-  const kit = window.PanelKit = Object.freeze({ $, api, post, notice, announce, make, refresh: () => refresh(), optionsFor: {}, state: { agentActive: false } });
+  const kit = window.PanelKit = Object.freeze({ $, api, post, notice, announce, make, check, refresh: () => refresh(), optionsFor: {}, state: { agentActive: false } });
 
   // -- which site the buttons work on: remembered in this browser ---------------------------
   const siteRadios = () => [...document.querySelectorAll('input[name="portal"]')];
@@ -398,10 +407,10 @@
     app.eraseSeen = signature; app.erasable = items;
     const keep = new Set(tickedBoxes().map((box) => box.value));
     $("erase-list").replaceChildren(...items.map((item) => {
-      const row = make("li"), label = make("label", "check"), box = make("input"), text = make("span");
+      const row = make("li"), box = make("input"), text = make("span");
       box.type = "checkbox"; box.value = item.id; box.disabled = !item.present; box.checked = item.present && keep.has(item.id);
       text.append(make("span", "erase-name", item.label), make("span", "hint", item.present ? item.what : "Nothing saved."));
-      label.append(box, text); row.append(label);
+      row.append(check(box, text));
       return row;
     }));
     updateEraseButtons();
@@ -462,7 +471,7 @@
 
   function fallingParts() {  // the visible components, from the top of the window down
     const top = (part) => part.getBoundingClientRect();
-    return [...document.querySelectorAll("body > header, .tabpanel > section, .tabpanel > fieldset, .grid > article, .right > section")]
+    return [...document.querySelectorAll("body > header, .tabpanel > section, .tabpanel > fieldset, .grid > article, .side-col > section")]
       .filter((part) => part.getClientRects().length)
       .sort((a, b) => top(a).top - top(b).top || top(a).left - top(b).left);
   }

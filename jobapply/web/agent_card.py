@@ -16,20 +16,20 @@ def render(ai_disclosure: str) -> str:
       Empty: it uses the job page already open in the agent's browser (the one that looks like a job, if you have several tabs open).</p>
       <div class="field"><label for="agent-minutes">Minutes, at most</label>
       <input id="agent-minutes" type="number" min="1" max="720" value="30" inputmode="numeric"></div>
-      <label class="check" for="agent-ai"><input id="agent-ai" type="checkbox" aria-describedby="agent-ai-hint"> Use the AI helper</label>
+      <label class="check" for="agent-ai"><input class="filled-in" id="agent-ai" type="checkbox" aria-describedby="agent-ai-hint"><span>Use the AI helper</span></label>
       <p class="hint" id="agent-ai-hint">It answers questions your saved answers cannot, and reads pages the rules are unsure about.
       {ai_disclosure}</p>
-      <label class="check" for="agent-guess"><input id="agent-guess" type="checkbox" checked aria-describedby="agent-guess-hint agent-guess-why"> Guess answers I have not saved</label>
+      <label class="check" for="agent-guess"><input class="filled-in" id="agent-guess" type="checkbox" checked aria-describedby="agent-guess-hint agent-guess-why"><span>Guess answers I have not saved</span></label>
       <p class="hint" id="agent-guess-hint">When no saved answer or rule fits, the AI helper makes its best guess and says so, and lists every guess first when it asks
       to send, so you can check it. Guesses are kept on the <a href="/questions">Questions page</a>, where you can keep one as your own answer or forget it. It never
       guesses an agreement, a legal or personal question, or what only you know (pay, notice period, dates, links). It asks you instead when it is not sure,
       or when the form does not accept its guess.</p>
       <p class="hint" id="agent-guess-why" hidden></p>
-      <label class="check" for="agent-send"><input id="agent-send" type="checkbox" aria-describedby="agent-send-hint"> Let it send applications</label>
+      <label class="check" for="agent-send"><input class="filled-in" id="agent-send" type="checkbox" aria-describedby="agent-send-hint"><span>Let it send applications</span></label>
       <p class="hint" id="agent-send-hint">Off: a rehearsal that stops before the final button. On: it can really send.</p>
       <div id="agent-send-options" hidden>
-        <label class="check" for="agent-wait"><input id="agent-wait" type="checkbox" checked aria-describedby="agent-wait-hint"> Wait for my approval before each
-        application is sent</label>
+        <label class="check" for="agent-wait"><input class="filled-in" id="agent-wait" type="checkbox" checked aria-describedby="agent-wait-hint"><span>Wait for my approval before each
+        application is sent</span></label>
         <p class="hint" id="agent-wait-hint">On (recommended): it shows you what it is about to send, here, and sends only after you press
         Approve. Off: it sends as soon as the form is filled in, without asking.</p>
         <div class="field"><label for="agent-confirm">Type YES to allow sending</label>

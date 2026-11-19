@@ -26,7 +26,7 @@
 
   // -- one box -------------------------------------------------------------------------------------
   function box(label, value, onInput, { pointer, area = false, rows = 3, month, hint, max } = {}) {
-    const id = uid(), wrap = make("div", "field"), name = make("label", "", label), input = make(area ? "textarea" : "input");
+    const id = uid(), wrap = make("div", "field"), name = make("label", "", label), input = make(area ? "textarea" : "input", area ? "materialize-textarea" : "");  // a textarea needs the class: Materialize styles no bare one
     name.htmlFor = id; input.id = id; input.value = value || ""; input.autocomplete = "off"; input.spellcheck = !month;
     if (area) input.rows = rows; else input.type = "text";
     if (max) input.maxLength = max;

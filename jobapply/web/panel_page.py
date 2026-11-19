@@ -61,8 +61,8 @@ def _suggested_hint(where: str) -> str:
 
 def _site_choice() -> str:
     options = "".join(
-        f'<label class="check"><input type="radio" name="portal" value="{key}" data-label="{escape(label, quote=True)}"'
-        f' data-note="{escape(SITE_NOTES.get(key, ""), quote=True)}"{" checked" if n == 0 else ""}> {escape(label)}</label>'
+        f'<label class="check"><input class="with-gap" type="radio" name="portal" value="{key}" data-label="{escape(label, quote=True)}"'
+        f' data-note="{escape(SITE_NOTES.get(key, ""), quote=True)}"{" checked" if n == 0 else ""}><span>{escape(label)}</span></label>'
         for n, (key, label) in enumerate(PORTALS.items())
     )
     return f"""
@@ -146,11 +146,11 @@ def render(token: str) -> str:
         _step(4, "Rehearse", "Walks through jobs on the chosen site and fills forms but never submits. Safe to run as often as you like.", f"""
 <div class="field"><label for="rehearse-minutes">Minutes, at most</label>
 <input id="rehearse-minutes" type="number" min="1" max="720" value="10" inputmode="numeric"></div>
-<label class="check" for="rehearse-ai"><input id="rehearse-ai" type="checkbox"> Use the AI helper</label>
-<label class="check" for="rehearse-recheck"><input id="rehearse-recheck" type="checkbox"> <span id="rehearse-recheck-text">{RECHECK_NONE}</span></label>
-<label class="check" for="rehearse-suggested"><input id="rehearse-suggested" type="checkbox" aria-describedby="rehearse-suggested-hint"> {SUGGESTED_LABEL}</label>
+<label class="check" for="rehearse-ai"><input class="filled-in" id="rehearse-ai" type="checkbox"><span>Use the AI helper</span></label>
+<label class="check" for="rehearse-recheck"><input class="filled-in" id="rehearse-recheck" type="checkbox"> <span id="rehearse-recheck-text">{RECHECK_NONE}</span></label>
+<label class="check" for="rehearse-suggested"><input class="filled-in" id="rehearse-suggested" type="checkbox" aria-describedby="rehearse-suggested-hint"><span>{SUGGESTED_LABEL}</span></label>
 {_suggested_hint("rehearse")}
-<label class="check" for="rehearse-agent"><input id="rehearse-agent" type="checkbox" checked aria-describedby="rehearse-agent-hint"> {AGENT_LABEL}</label>
+<label class="check" for="rehearse-agent"><input class="filled-in" id="rehearse-agent" type="checkbox" checked aria-describedby="rehearse-agent-hint"><span>{AGENT_LABEL}</span></label>
 <p class="hint" id="rehearse-agent-hint">{AGENT_RISK} In a rehearsal it stops before the final button, so nothing is sent.</p>"""
               + _button("Start the rehearsal", "rehearse", "btn-primary")),
         _step(5, "Apply for real", f"Sends real applications on the chosen site. You will be asked how many, and to confirm. Start with 3 (with {listed([PORTALS[key] for key in SITE_NOTES])}, start with 1).",
@@ -163,8 +163,9 @@ def render(token: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="panel-token" content="{escape(token, quote=True)}">
 <title>Job Apply: control panel</title>
+<link rel="stylesheet" href="/static/materialize.min.css">
 <link rel="stylesheet" href="/static/theme.css">
-<link rel="stylesheet" href="/static/resume-theme.css">
+<link rel="stylesheet" href="/static/panel.css">
 <script src="/static/panel.js" defer></script>
 <script src="/static/jobtable.js" defer></script>
 <script src="/static/agent.js" defer></script>
@@ -185,13 +186,15 @@ def render(token: str) -> str:
 <body>
 <a class="skip" href="#console">Skip to the output</a>
 <header class="top">
-  <div>
-    <h1>Job Apply</h1>
-    <p class="sub">Your control panel. Click a step; what happens appears in the output.</p>
-  </div>
-  <div class="top-right">
-    <span class="chip" id="os-chip">Looking at your computer&hellip;</span>
-    <button class="btn btn-small" id="quit" type="button">Quit</button>
+  <div class="top-bar">
+    <div>
+      <h1>Job Apply</h1>
+      <p class="sub">Your control panel. Click a step; what happens appears in the output.</p>
+    </div>
+    <div class="top-right">
+      <span class="chip" id="os-chip">Looking at your computer&hellip;</span>
+      <button class="btn btn-small" id="quit" type="button">Quit</button>
+    </div>
   </div>
   <div class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" type="button" role="tab" id="tab-apply" aria-controls="panel-apply" aria-selected="true">Apply on a site</button>
@@ -209,7 +212,7 @@ New features may be missing, and some buttons may do what they used to. Press <s
 <noscript><p class="banner">The buttons on this page need JavaScript. You can still use
 <a href="/profile">Profile and resume</a> and the <a href="/ai">AI helper</a>.</p></noscript>
 <main class="layout">
-  <div class="left">
+  <div class="main-col">
    <div class="tabpanel" role="tabpanel" id="panel-apply" aria-labelledby="tab-apply">
     <section class="card" aria-labelledby="h-status">
       <h2 id="h-status">Where things stand</h2>
@@ -235,7 +238,7 @@ New features may be missing, and some buttons may do what they used to. Press <s
    <div class="tabpanel" role="tabpanel" id="panel-profile" aria-labelledby="tab-profile" hidden>{profile_tab.render(ask_card.render(), _details_card(), _tools_card(), _privacy_card())}
    </div>
   </div>
-  <aside class="right" data-only-on="tab-apply tab-auto tab-agent">
+  <aside class="side-col" data-only-on="tab-apply tab-auto tab-agent">
     <section class="card console-card" id="console" aria-labelledby="h-out">
       <div class="console-head">
         <h2 id="h-out" tabindex="-1">Output</h2>
@@ -259,20 +262,17 @@ New features may be missing, and some buttons may do what they used to. Press <s
     <input id="apply-count" type="number" min="1" max="500" value="3" inputmode="numeric"></div>
     <div class="field"><label for="apply-minutes">How many minutes, at most</label>
     <input id="apply-minutes" type="number" min="1" max="720" value="30" inputmode="numeric"></div>
-    <label class="check" for="apply-ai"><input id="apply-ai" type="checkbox">
-      Let the AI helper answer questions and judge jobs by their description</label>
+    <label class="check" for="apply-ai"><input class="filled-in" id="apply-ai" type="checkbox"><span>Let the AI helper answer questions and judge jobs by their description</span></label>
     <p class="hint" id="apply-ai-note">{escape(AI_DISCLOSURE)}</p>
-    <label class="check" for="apply-recheck"><input id="apply-recheck" type="checkbox" aria-describedby="apply-recheck-hint">
+    <label class="check" for="apply-recheck"><input class="filled-in" id="apply-recheck" type="checkbox" aria-describedby="apply-recheck-hint">
       <span id="apply-recheck-text">{RECHECK_NONE}</span></label>
     <p class="hint" id="apply-recheck-hint">Jobs it turned away earlier (they did not match, or showed no Easy Apply button) get another look, for
     example after you lower your minimum skill match. Jobs you already applied to are never re-sent.</p>
-    <label class="check" for="apply-suggested"><input id="apply-suggested" type="checkbox" aria-describedby="apply-suggested-hint">
-      {SUGGESTED_LABEL}</label>
+    <label class="check" for="apply-suggested"><input class="filled-in" id="apply-suggested" type="checkbox" aria-describedby="apply-suggested-hint"><span>{SUGGESTED_LABEL}</span></label>
     {_suggested_hint("apply")}
-    <label class="check" for="apply-agent"><input id="apply-agent" type="checkbox" checked aria-describedby="apply-agent-hint"> {AGENT_LABEL}</label>
+    <label class="check" for="apply-agent"><input class="filled-in" id="apply-agent" type="checkbox" checked aria-describedby="apply-agent-hint"><span>{AGENT_LABEL}</span></label>
     <p class="hint" id="apply-agent-hint">{AGENT_RISK}</p>
-    <label class="check" for="apply-approval"><input id="apply-approval" type="checkbox" checked aria-describedby="apply-approval-hint">
-      {APPROVAL_LABEL}</label>
+    <label class="check" for="apply-approval"><input class="filled-in" id="apply-approval" type="checkbox" checked aria-describedby="apply-approval-hint"><span>{APPROVAL_LABEL}</span></label>
     <p class="hint" id="apply-approval-hint">{APPROVAL_HINT}</p>
     <div class="field"><label for="apply-confirm">Type YES to confirm</label>
     <input id="apply-confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>

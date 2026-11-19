@@ -1,0 +1,269 @@
+/* The control panel: its layout, the tab bar, the steps, the output, the dashboard, Ask the AI, Auto-apply and the Create Resume tab.
+   The look is Materialize's (see theme.css); this file lays the panel out and names what is peculiar to it. */
+
+/* the tab bar, inside the app bar: Materialize's uppercase tabs, with a white bar under the chosen one */
+.tabs { max-width: 1240px; height: auto; padding: 0 12px; display: flex; overflow-x: auto; background: transparent; }
+.tabs .tab { --btn-bg: transparent; flex: none; height: 48px; line-height: 48px; padding: 0 20px; font: inherit; font-size: .875rem; font-weight: 500; letter-spacing: .8px;
+  color: var(--tint); background: transparent; border: 0; border-radius: 0; cursor: pointer; transition: background-color .2s; }
+.tabs .tab:hover { color: #fff; background: rgba(0, 0, 0, .16); }  /* a hover darkens the bar: lightening it dropped white text below 4.5:1 */
+.tabs .tab[aria-selected="true"] { color: #fff; font-weight: 700; box-shadow: inset 0 -3px 0 #fff; }  /* the chosen tab: a bar under it, not only a colour */
+.badge { float: none; display: inline-block; min-width: 0; height: auto; margin-left: 8px; padding: 0 9px; line-height: 20px; border-radius: 10px; background: #fff; color: var(--primary-dark); font-size: .75rem; font-weight: 700; }
+.badge[data-kind="urgent"] { background: var(--warn-bg); color: var(--warn-ink); }
+
+/* the layout: the steps on the left, the output on the right */
+.layout { max-width: 1240px; margin: 0 auto; padding: 0 24px 64px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+.layout[data-tab="tab-profile"], .layout[data-tab="tab-resume"] { grid-template-columns: minmax(0, 1fr); }  /* these tabs have no use for Output: they get the whole page */
+.main-col, .tabpanel { display: grid; grid-template-columns: minmax(0, 1fr); }  /* minmax(0): never grow to the widest child */
+.side-col { position: sticky; top: 20px; display: flex; flex-direction: column; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 24px; align-items: start; margin-bottom: 24px; }
+.grid > .card { margin: 0; }
+.agent-live { margin-top: 24px; }
+.feed { font-size: .95rem; }
+
+/* the steps: a numbered Materialize "floating button" and a card each */
+.step { display: grid; grid-template-columns: 40px 1fr; column-gap: 16px; align-content: start; }
+.step > p, .step > .controls { grid-column: 1 / -1; }
+.num { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 1.1rem; color: #fff; background: var(--primary); box-shadow: var(--z1); }
+.step[aria-current="step"] { outline: 3px solid var(--primary); outline-offset: 3px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; margin-top: 12px; }
+.next { font-weight: 500; margin: 18px 0 0; }
+
+/* where things stand: Materialize chips, a mark and a word each (colour only helps) */
+.pills { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; }
+.pill { display: inline-flex; gap: 8px; align-items: center; max-width: 100%; margin: 0; padding: 6px 14px; border-radius: 16px; background: var(--sunk); font-weight: 500; font-size: .9rem; }
+.pill[data-state="ok"] { background: var(--ok-bg); color: var(--ok-ink); }
+.pill[data-state="warn"] { background: var(--warn-bg); color: var(--warn-ink); }
+.pill[data-state="off"] { color: var(--muted); }
+.pill .mark { font-weight: 800; flex: none; }
+.pill span:last-child { min-width: 0; overflow-wrap: anywhere; }
+
+/* the output */
+.well { background: var(--sunk); border-radius: 2px; }
+.console-card { display: flex; flex-direction: column; max-height: calc(100vh - 40px); min-height: 440px; }
+.console-head { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 14px; }
+.console-head h2 { margin: 0; }
+.status { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; padding: 4px 14px; border-radius: 16px; background: var(--sunk); font-weight: 500; }
+.status[data-state="running"], .status[data-state="stopping"] { background: var(--tint); color: var(--accent); }
+.status[data-state="finished"] { background: var(--ok-bg); color: var(--ok-ink); }
+.status[data-state="failed"] { background: var(--bad-bg); color: var(--bad-ink); }
+.status[data-state="stopped"] { background: var(--warn-bg); color: var(--warn-ink); }
+.status[data-state="idle"] { color: var(--muted); }
+.status[data-state="running"]::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(.55); opacity: .5; } }
+.log { flex: 1; min-height: 280px; margin: 0; padding: 16px 18px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.55; }
+.report { margin-top: 16px; padding: 18px 22px; overflow-wrap: anywhere; line-height: 1.55; }  /* it flows with the page: no scroll box to hide results in */
+.report > :first-child { margin-top: 0; }
+.report h3 { margin: 0 0 12px; font-size: 1.25rem; }
+.report h4 { margin: 22px 0 8px; font-size: 1.05rem; }
+.report h5 { margin: 16px 0 6px; font-size: .95rem; }
+.report p, .report ul { margin: 0 0 12px; }
+.report li { margin: 0 0 8px; }
+.report code { padding: 1px 7px; font-size: .88em; }
+.report .table-wrap { margin: 4px 0 14px; overflow-x: auto; }
+.report table { min-width: 260px; }
+.report th, .report td { padding: 8px 18px 8px 0; border-bottom: 1px solid var(--hairline); }
+.report a { white-space: nowrap; }
+.reports { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0 0; padding: 0; }
+.reports li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }  /* a report and its Delete button stay together */
+.reports [data-report] { white-space: nowrap; }
+/* Unread is told three ways, not by colour alone: a dot, a heavier weight, and the screen-reader name ("..., unread"). */
+.reports .btn[data-read="false"] { font-weight: 800; }
+.reports .btn[data-read="false"]::before { content: "\25CF\00a0"; }
+.reports .btn[data-read="true"] { color: var(--muted); font-weight: 400; }
+.reports .btn[aria-expanded="true"] { background-color: var(--tint); box-shadow: inset 0 0 0 2px var(--primary); font-weight: 700; }  /* the report on show looks pressed */
+.table-wrap { overflow-x: auto; margin-top: 12px; }
+progress { appearance: none; -webkit-appearance: none; width: 100%; height: 6px; border: 0; border-radius: 2px; background: #b2dfdb; accent-color: var(--primary); }  /* Materialize's progress: a teal bar on a pale track */
+progress::-webkit-progress-bar { background: #b2dfdb; border-radius: 2px; }
+progress::-webkit-progress-value { background: var(--primary); border-radius: 2px; }
+progress::-moz-progress-bar { background: var(--primary); border-radius: 2px; }
+
+/* the Profile tab's dashboard: pale fills, each with a dark outline in a tested colour (the outline meets the 3:1 rule for shapes; the text on every fill is
+   dark; every number is also written out: the chips, the table) */
+.seg-submitted { --fill: #c8e6c9; --ink: var(--ok); }
+.seg-rehearsed { --fill: #bbdefb; --ink: var(--info); }
+.seg-skipped { --fill: #e0e0e0; --ink: var(--neutral); }
+.seg-errors { --fill: #ffcdd2; --ink: var(--danger); }
+.seg-waiting { --fill: #ffe0b2; --ink: var(--warn); }
+.dash-top { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; margin-bottom: 8px; }
+.donut { width: 190px; height: 190px; flex: none; }
+.donut .seg { fill: var(--fill); stroke: var(--ink); stroke-width: .5px; stroke-linejoin: round; }
+.donut-number { font-size: 8px; font-weight: 700; fill: var(--text); }
+.donut-unit { font-size: 3.2px; fill: var(--muted); }
+.pick { cursor: pointer; }
+.seg.pick:hover, .seg[data-chosen] { stroke-width: 1.1px; }
+.kpis { flex: 1 1 320px; display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 14px; }
+.kpi { --btn-bg: var(--fill); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 14px 12px; font: inherit; color: var(--text); text-align: left; cursor: pointer;
+  background: var(--fill); border: 2px solid var(--ink); border-radius: 2px; box-shadow: var(--z1); }
+.kpi:hover { box-shadow: var(--z2); }
+.kpi[data-chosen] { box-shadow: inset 0 0 0 2px var(--ink); }  /* chosen: a double outline, not only a colour */
+.kpi-name { font-weight: 500; font-size: .92rem; }
+.kpi-num { font-size: 1.8rem; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.2; }
+#h-dash-sites { margin: 30px 0 4px; }
+#dash-scale { margin: 0 0 16px; }
+.dash-rows { display: grid; gap: 18px; margin: 0 0 18px; padding: 0; }
+.dash-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 3.2em; gap: 6px 14px; align-items: center; margin: 0; }
+.dash-name { font-weight: 500; }
+.dash-total { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar { display: block; width: 100%; height: 22px; border-radius: 11px; overflow: hidden; background: var(--sunk); }
+.bar-track { fill: none; }
+.bar .seg { fill: var(--fill); stroke: var(--ink); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }  /* the outline also tells neighbours apart */
+.bar .seg.pick:hover, .bar .seg[data-chosen] { stroke-width: 3px; }
+.dash-facts { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: .9rem; }
+.dash-facts .chip { --btn-bg: var(--fill); font: inherit; font-size: .88rem; color: var(--text); background: var(--fill); border: 1.5px solid var(--ink); padding: 3px 12px; min-height: 28px; cursor: pointer; }
+.dash-facts .chip[data-chosen] { box-shadow: inset 0 0 0 2px var(--ink); font-weight: 700; }
+.dash-list { margin: 8px 0 18px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.dash-list-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+#dash-list .hint { margin: 6px 0 10px; }
+#dash-list th, #dash-list td, #auto-table th, #auto-table td { text-align: left; vertical-align: top; overflow-wrap: normal; }  /* the page-wide "break anywhere" would let a column shrink until a word splits */
+#dash-list tbody th, #auto-table tbody th { overflow-wrap: anywhere; }  /* ...but a job's title may be one very long word, and it alone may break */
+#dash-list td.short, #auto-table td.short { white-space: nowrap; }
+.dash-sub { display: block; color: var(--muted); font-weight: 400; font-size: .86rem; }
+.dash-table summary { font-weight: 500; }
+.dash-table table, .dash-list table, #auto-table { width: 100%; font-variant-numeric: tabular-nums; }
+#dash-list-wrap { max-height: 50vh; overflow-y: auto; }  /* half the screen at most: a long list scrolls inside itself */
+#dash-list thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); box-shadow: 0 1px 0 var(--hairline); }
+.dash-list table { min-width: 34rem; }
+.dash-table caption { text-align: left; font-weight: 500; padding-bottom: 6px; }
+.dash-table th, .dash-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--hairline); }
+.dash-list th, .dash-list td { padding: 8px 10px; border-bottom: 1px solid var(--hairline); }
+.dash-table th[scope="row"], .dash-table thead th:first-child { text-align: left; }
+.dash-table tfoot th, .dash-table tfoot td { font-weight: 700; }
+
+/* Ask the AI: a card on the Profile tab. The talk scrolls inside it after 60% of the window's height; the question box stays below. */
+.ask-card { display: flex; flex-direction: column; gap: 8px; }
+.ask-card h2, .ask-about { margin: 0; }
+.ask-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+.ask-scroll { flex: 0 1 auto; min-height: 0; max-height: 60vh; overflow-y: auto; display: grid; align-content: start; gap: 10px; }
+.ask-log { display: grid; gap: 10px; margin: 0; padding: 0; }
+.ask-log:empty { display: none; }
+.ask-msg { margin: 0; padding: 10px 14px; border-radius: 2px; background: var(--sunk); }
+.ask-user { margin-left: 24px; background: var(--tint); }
+.ask-assistant { margin-right: 24px; }
+.ask-problem { border-left: 4px solid var(--danger); background: var(--bad-bg); }
+.ask-who { font-size: .82rem; color: var(--muted); }
+.ask-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-sent { margin: 6px 0 0; font-size: .82rem; color: var(--muted); }
+.ask-form { display: grid; gap: 6px; flex: none; }
+#ask-starters .hint, .ask-card .hint { margin: 0 0 6px; }
+.ask-more summary { font-weight: 500; font-size: .9rem; }
+.ask-more .hint { margin: 6px 0 0; }
+.ask-status { color: var(--muted); font-weight: 500; align-self: center; }
+
+/* the Auto-apply v2 tab */
+.auto-ready { margin: 8px 0 18px; padding: 0; }
+.auto-ready li { margin: 10px 0; }
+fieldset.auto-sites { border: 0; padding: 0; margin: 14px 0 0; }  /* a plain group of radios, not a box: it names its element so the nested-box rule in theme.css does not win */
+#auto-table th, #auto-table td { padding: 8px 18px 8px 0; border-bottom: 1px solid var(--hairline); }
+#panel-auto[data-busy] #auto-live { order: -1; }  /* a run is going, or a job waits for you: what needs you comes first */
+.auto-meter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 12px 0; }
+.auto-meter progress { flex: 1 1 220px; height: 8px; }
+.auto-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 16px; }
+.auto-cap summary { font-weight: 500; margin-top: 8px; }
+#auto-job-title { font-size: 1.15rem; }
+
+/* the Create Resume tab: your resumes, the editor, its preview */
+.resume-cards { margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.resume-card { margin: 0; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 2px; background: var(--surface); box-shadow: var(--z1); }
+.resume-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-bottom: 8px; }
+.resume-bar p { margin: 0; font-weight: 500; }
+.resume-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
+.resume-look { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.resume-block { margin: 10px 0; padding-top: 6px; border-top: 1px solid var(--hairline); }
+.resume-block > summary { padding: 4px 0; }
+.resume-entry { margin: 8px 0; padding: 2px 14px 10px; border: 1px solid var(--hairline); border-radius: 2px; background: var(--bg); }
+.resume-entry h4 { margin: 8px 0 0; }
+.resume-bullets-title { margin: 10px 0 0; font-weight: 500; font-size: .9em; }
+.resume-bullet { margin: 6px 0 10px; }
+.resume-sections, .resume-cats, .resume-fixes { padding: 0; }
+.resume-section-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 4px 0; }
+.resume-section-row .check { min-width: 190px; margin: 0; }
+.resume-ai { margin: 6px 0 10px; padding: 4px 14px 10px; border-left: 4px solid var(--primary); border-radius: 2px; background: var(--tint); }
+.resume-suggestion { margin: 8px 0; padding-bottom: 6px; border-bottom: 1px solid var(--hairline); }
+.diff { line-height: 1.6; }
+.diff del { text-decoration: line-through; color: var(--bad-ink); background: var(--bad-bg); }
+.diff ins { text-decoration: none; font-weight: 600; color: var(--ok-ink); background: var(--ok-bg); }
+.diff, .resume-fix, .resume-change, .resume-kw, .resume-card h3, .resume-entry h4 { overflow-wrap: anywhere; }
+#resume-score { font-size: 1.25rem; margin: 10px 0 6px; }
+.resume-cats, .resume-fixes { margin: 6px 0 10px; }
+.resume-cat { display: grid; align-items: center; margin: 6px 0; grid-template-columns: minmax(0, 18em) minmax(0, 1fr); gap: 2px 12px; font-size: .9em; color: var(--muted); }
+.resume-fix, .resume-kw { margin: 8px 0; padding: 8px 12px; border: 1px solid var(--hairline); border-radius: 2px; background: var(--surface); }
+.resume-fix .hint { display: block; margin: 2px 0 6px; }
+/* small labels: the kind of a problem, whether a skill is there. Colour is never the only signal: each chip carries its word. */
+#panel-resume .chip { display: inline-flex; align-items: center; min-height: 0; padding: 1px 10px; font-size: .75rem; font-weight: 700; background: var(--sunk); color: var(--muted); }
+#panel-resume .chip[data-kind="ok"] { background: var(--ok-bg); color: var(--ok-ink); }
+#panel-resume .chip[data-kind="warn"] { background: var(--warn-bg); color: var(--warn-ink); }
+#panel-resume .chip[data-kind="bad"] { background: var(--bad-bg); color: var(--bad-ink); }
+/* tailoring: one change per row, edged in the primary once accepted (the checkbox is what says so; the edge only helps) */
+.resume-changes { margin: 8px 0; padding: 0; display: grid; gap: 8px; }
+.resume-change { margin: 0; padding: 8px 14px; border: 1px solid var(--hairline); border-radius: 2px; background: var(--surface); }
+.resume-change:has(input:checked) { border-left: 4px solid var(--primary); background: var(--tint); }
+.resume-change-head { display: flex; align-items: center; gap: 8px; }
+.resume-change-head .check { margin: 4px 0; }
+#resume-pdf-text { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; padding: 8px 12px; background: var(--sunk); border-radius: 2px; font-size: .85rem; }
+/* the ATS answer: the word and a mark say it, the colour only helps */
+.resume-verdict { margin: 10px 0; padding: 10px 16px; border-left: 6px solid var(--line); border-radius: 2px; background: var(--sunk); }
+.resume-verdict h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.resume-verdict[data-key="compatible"] { border-color: var(--ok); background: var(--ok-bg); color: var(--ok-ink); }
+.resume-verdict[data-key="mostly"] { border-color: var(--warn); background: var(--warn-bg); color: var(--warn-ink); }
+.resume-verdict[data-key="not"] { border-color: var(--danger); background: var(--bad-bg); color: var(--bad-ink); }
+.resume-verdict .hint { color: inherit; }
+.resume-chip { display: inline-block; padding: 1px 10px; border-radius: 12px; font-size: .86rem; font-weight: 600; background: var(--sunk); color: var(--text); }
+.resume-chip[data-key="compatible"] { background: var(--ok-bg); color: var(--ok-ink); }
+.resume-chip[data-key="mostly"] { background: var(--warn-bg); color: var(--warn-ink); }
+.resume-chip[data-key="not"] { background: var(--bad-bg); color: var(--bad-ink); }
+.resume-caption { margin: 14px 0 0; font-size: .8rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+/* the five parts of an open resume: Materialize tabs, white, with a teal bar under the chosen one (a bar and a weight, never a colour alone) */
+.resume-subtabs { display: flex; flex-wrap: wrap; margin: 10px 0 0; border-bottom: 1px solid var(--hairline); }
+.resume-subtab { --btn-bg: transparent; min-height: 48px; padding: 0 20px; font: inherit; font-size: .875rem; font-weight: 500; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--muted); background: transparent; border: 0; border-bottom: 3px solid transparent; border-radius: 0; cursor: pointer; }
+.resume-subtab:hover { background: var(--tint); color: var(--accent); }
+.resume-subtab[aria-selected="true"] { color: var(--accent); font-weight: 700; border-bottom-color: var(--primary); }
+#resume-file-card { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.resume-preview-col { min-width: 0; }
+.resume-preview-wrap { height: 78vh; min-height: 420px; overflow: hidden; border: 1px solid var(--hairline); border-radius: 2px; background: var(--sunk); }
+#resume-preview { display: block; border: 0; transform-origin: top left; }  /* its width, height and scale are set by resume.js: the whole page, shrunk to fit */
+@media (min-width: 1100px) {
+  .resume-grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+  .resume-preview-col { position: sticky; top: 12px; }
+  .resume-preview-wrap { height: calc(100vh - 130px); }
+}
+@media (max-width: 560px) { .resume-cat { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) {  /* a phone: name and total share a line, and the bar gets the whole width under them */
+  .dash-row { grid-template-columns: minmax(0, 1fr) 3.2em; }
+  .dash-name { grid-column: 1; grid-row: 1; }
+  .dash-total { grid-column: 2; grid-row: 1; }
+  .dash-row .bar { grid-column: 1 / -1; grid-row: 2; }
+  .dash-facts { grid-column: 1 / -1; grid-row: 3; }
+  .donut { margin: 0 auto; }
+}
+@media (max-width: 980px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .side-col { position: static; }
+  .console-card { max-height: none; }
+}
+
+/* leaving: the script drops every component off the bottom of the window, then everything goes and the goodbye shows */
+html.leaving, html.leaving body { overflow: hidden; }
+html.leaving body { pointer-events: none; }
+html.gone body > :not(#goodbye):not(#announce) { display: none; }
+.goodbye { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; }
+.goodbye:focus { outline: none; }
+.goodbye-text { width: fit-content; max-width: 100%; padding: 38px 46px; border-radius: 2px; background: var(--surface); box-shadow: var(--z5);
+  font-size: clamp(1.35rem, 3.6vw, 2.1rem); font-weight: 400; line-height: 1.4; animation: arrive .8s ease-out both; }
+.goodbye p { margin: 0; }
+.goodbye .sign { margin-top: .6em; text-align: right; color: var(--accent); }
+@keyframes arrive { from { opacity: 0; transform: translateY(24px); } }
+@media (forced-colors: active) {  /* the user's own colours: shapes keep apart by their outlines, labels and the table */
+  .tabs .tab[aria-selected="true"], .resume-subtab[aria-selected="true"] { border-style: double; border-width: 0 0 5px; box-shadow: none; }
+  .reports .btn[aria-expanded="true"] { border: 5px double Highlight; }
+  .step[aria-current="step"] { outline: 4px solid Highlight; }
+  .seg-submitted { --fill: Highlight; --ink: CanvasText; }
+  .seg-rehearsed { --fill: LinkText; --ink: CanvasText; }
+  .seg-skipped { --fill: GrayText; --ink: CanvasText; }
+  .seg-errors { --fill: Mark; --ink: CanvasText; }
+  .seg-waiting { --fill: VisitedText; --ink: CanvasText; }
+  .donut-number, .donut-unit { fill: CanvasText; }
+  .kpi, .pill, .status, .num, .goodbye-text, .resume-card { border: 2px solid CanvasText; box-shadow: none; }
+  .kpi[data-chosen], .dash-facts .chip[data-chosen] { outline: 3px solid CanvasText; }
+  #panel-resume progress, progress { border: 1px solid CanvasText; }
+}

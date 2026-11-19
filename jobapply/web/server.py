@@ -61,7 +61,8 @@ BODY_LIMITS = {"/api/ask": 64 * 1024, **{route: RESUME_BODY for route in RESUME_
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
 JS = "text/javascript; charset=utf-8"
-STATIC_TYPES = {"theme.css": "text/css; charset=utf-8", "resume-theme.css": "text/css; charset=utf-8", "panel.js": JS, "agent.js": JS, "dashboard.js": JS, "ask.js": JS, "tabs.js": JS, "auto.js": JS, "jobtable.js": JS,
+CSS = "text/css; charset=utf-8"
+STATIC_TYPES = {"materialize.min.css": CSS, "theme.css": CSS, "panel.css": CSS, "panel.js": JS, "agent.js": JS, "dashboard.js": JS, "ask.js": JS, "tabs.js": JS, "auto.js": JS, "jobtable.js": JS,
                 "resume.js": JS, "resume-form.js": JS, "resume-ai.js": JS, "resume-job.js": JS, "resume-enrich.js": JS, "resume-tailor.js": JS, "resume-check.js": JS, "resume-tabs.js": JS, "resume-ats.js": JS}
 FILTERS = ("group", "text", "days")  # what the tracker can be narrowed by, in the order Panel.auto_history takes them
 TOKEN_HEADER = "X-Token"

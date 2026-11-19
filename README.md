@@ -17,7 +17,7 @@ common jobs. This README is the reference behind it.
 | | Status |
 |---|---|
 | Naukri: login check, finding jobs, reading jobs, one-click "Quick apply" | **Tested on the live site, on a Mac.** An application was sent and Naukri's own "Applied jobs" counter went up. |
-| Naukri jobs that ask **screening questions** after Quick apply | **Built, tested only on a stand-in page, never on the live site.** The program answers in Naukri's question side bar the way it does on LinkedIn: from your saved answers, then the AI; a question it cannot answer waits for you to type or tick it in the bar (it is saved) or to answer in the panel. **Where your network blocks Naukri's question script the bar never opens** (seen on a company network): then nothing is sent, the questions are listed on the Questions page, and the job is parked. |
+| Naukri jobs that ask **screening questions** after Quick apply | **Built, tested only on a stand-in page, never on the live site.** The program answers in Naukri's question side bar the way it does on LinkedIn: from your saved answers, then the AI; a question it cannot answer waits for you to type or tick it in the bar (it is saved) or to answer in the panel. If Naukri's page does not use the class names the program guesses, the bar is found by the text of its questions instead. **Where your network blocks Naukri's question script the bar never opens** (seen on a company network): then nothing is sent, the questions are listed on the Questions page, and the job is parked. |
 | The control panel | **Tested on a Mac, in a real browser:** the page, the buttons, live output, the confirmation, and a rehearsal that was stopped part-way (the program wrote its report). |
 | **Windows** (`Start.bat`, `setup.ps1`, and the panel's Windows parts: opening File Explorer, `winget`, the Stop button) | **Checked as far as a Mac allows. Never run on a Windows PC.** `setup.ps1` is parsed and *run for real under PowerShell* (on a Mac, with a pretend Windows around it) for a normal install, a failed install, no internet (including pasting a mirror address), no Python and a broken Python; this found and fixed a real bug (a failed install used to print "[ok]"). The panel's Windows-specific commands, the browser search, line endings and file names are covered by tests that pretend to be Windows. **Not checked:** `Start.bat` itself (`cmd.exe` cannot run on a Mac: it is 21 short lines, read by eye), BrowserOS neo's install location on Windows (a best guess; Chrome and Edge are found by their standard paths), and a real run of the panel and a browser on Windows. Tell me what breaks. |
 | The AI helper | Built and tested with **simulated AI replies only**. It has never talked to the real Claude, ChatGPT, Gemini, OpenRouter or Ollama, and has never answered a real Naukri question. |
@@ -580,7 +580,7 @@ changing so it never saves half a sentence, then carries on with what you entere
 | LinkedIn (Easy Apply window) | Yes. Text boxes, dropdowns, radio buttons and tick boxes |
 | Indeed (its application form) | Yes. The same |
 | Wellfound | Yes (its page layout has not been checked on the live site) |
-| Naukri | Yes, in its question side bar: what you type and send, or tick, is saved. **Not yet checked on the live site** (its selectors are guesses, see `naukri_chat.py`), and it needs a network that lets Naukri's question script load |
+| Naukri | Yes, in its question side bar: what you type and send, or tick, is saved. **Not yet checked on the live site** (its selectors are guesses, see `naukri_chat.py`; if they miss, the bar is found by the text of its questions, see `naukri_chat_find.py`), and it needs a network that lets Naukri's question script load |
 | Instahyre | Nothing to answer: it has no questions form, only an Apply button |
 
 Only a question the program was stuck on is saved this way. An optional box you fill in, or something the site pre-filled for
@@ -856,7 +856,12 @@ or `own_browser` fixture is the mark; see `tests/conftest.py`), so nobody has to
   - `actions.py`: the **only** commands the panel can run, built from fixed words and checked numbers
   - `hostos.py`: the few things that differ between Windows and Mac, as plain data so every system is testable
   - `runner.py`: runs one program at a time, keeps its output, stops it politely (Ctrl+C, then a hard kill after 20 s)
-  - `panel.py` (what the buttons do and the status they report), `panel_page.py` (the markup), `static/` (theme and script)
+  - `panel.py` (what the buttons do and the status they report), `panel_page.py` (the markup), `static/` (the look and the scripts)
+  - The look is [Materialize](https://materializecss.com/) 1.0.0 (MIT licence, `static/materialize.LICENSE.txt`), **kept inside this folder** as `static/materialize.min.css`:
+    the panel loads nothing from the internet, and its strict security policy would refuse it if it tried. Do not edit that file; `static/theme.css` (shared by
+    every page) and `static/panel.css` (the control panel only) hold everything that differs. Materialize's own colours do not pass the accessibility rules
+    this program keeps (WCAG 2.2 AA), so those two files use the shades of its palette that do, and the tests check them. Buttons are not all-capitals (they
+    are harder to read); the tab labels are.
   - `app.py`, `forms.py`, `ai_form.py`, `pages.py`: the profile and AI forms
 - `scripts/build_release.py`: builds the one ZIP for both systems, after scanning it for your personal details. Run
   `python scripts/build_release.py` from a checkout whose changes are committed. It zips **only the files git tracks**, so your
