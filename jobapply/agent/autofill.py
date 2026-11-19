@@ -17,7 +17,7 @@ from typing import Dict, List, Optional
 
 from ..adapters.forms import OPTIONAL, field_text
 from ..answers import AnswerResolver, pick_option
-from .labels import LEGAL, SEARCH_BOX, SIDE_WIDGET, is_consent, is_secret
+from .labels import LEGAL, SEARCH_BOX, SIDE_WIDGET, is_consent, is_generic, is_secret
 from .models import Action, ActionType, Element, Observation
 
 RESUME_WORDS = re.compile(r"\b(?:resume|r[eé]sum[eé]|cv|curriculum vitae)\b", re.I)
@@ -101,6 +101,10 @@ class Autofill:
         if e.filled or not question or SEARCH_BOX.search(question) and not e.required:
             return
         required = self._required([e], question)
+        if is_generic(question):  # "textbox": no question to answer, and none to save an answer under (it once saved yours as "textbox")
+            if required:
+                found.manual.append("A required box with no label I can read: fill it in yourself")
+            return
         if is_secret(question, e.placeholder) or e.type == "password":
             if required:
                 found.manual.append(question[:80])

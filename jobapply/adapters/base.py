@@ -106,6 +106,8 @@ class Adapter(abc.ABC):
     # True when a job parked for an unanswered question can never have been sent: every question is asked before the press
     # that sends. Only then does parking give the run's attempt back (a portal that applies on the first click cannot say so).
     parks_before_sending: bool = False
+    # True for a portal that only LISTS jobs: every application is made on the employer's site, so the AI agent is always needed there.
+    applies_elsewhere: bool = False
     # A pop-up whose wording matches this holds the application itself (or a question about it): never closed as a nuisance.
     protected_prompts: Optional[Pattern] = None
 
@@ -138,6 +140,10 @@ class Adapter(abc.ABC):
 
     @abc.abstractmethod
     def apply(self, job: Job, resolver, dry_run: bool) -> Result: ...
+
+    def applied(self, job: Job) -> None:
+        """An application to this job was confirmed sent (here, or by the agent on the employer's site). A portal that keeps a record of
+        what you applied to may write it there. Most do it themselves already, so the default does nothing."""
 
     def sync_resume(self, path: Path) -> None:
         raise NotImplementedError(f"{self.name}: applies with the resume stored in your portal profile")

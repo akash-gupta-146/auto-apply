@@ -24,7 +24,7 @@ DEFAULT_REHEARSAL_MINUTES = 10
 DEFAULT_AGENT_MINUTES = 30
 DEFAULT_AUTO_MINUTES = 120  # the longest an Auto-apply run goes on; the number of applications usually ends it first
 AGENT_HANDOFF = ("rehearse", "apply")  # the portal runs that can hand a company-site job to the agent
-PORTALS = {"naukri": "Naukri", "instahyre": "Instahyre", "linkedin": "LinkedIn", "indeed": "Indeed", "wellfound": "Wellfound"}  # the sites the panel can work on, in the order shown
+PORTALS = {"naukri": "Naukri", "instahyre": "Instahyre", "linkedin": "LinkedIn", "indeed": "Indeed", "wellfound": "Wellfound", "hiringcafe": "HiringCafe"}  # the sites the panel can work on, in the order shown
 DEFAULT_PORTAL = "naukri"
 
 

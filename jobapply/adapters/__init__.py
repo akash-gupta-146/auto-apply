@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Dict, Type
 
 from .base import Adapter
+from .hiringcafe import HiringCafeAdapter
 from .indeed import IndeedAdapter
 from .instahyre import InstahyreAdapter
 from .linkedin import LinkedInAdapter
@@ -16,4 +17,5 @@ ADAPTERS: Dict[str, Type[Adapter]] = {
     "linkedin": LinkedInAdapter,
     "wellfound": WellfoundAdapter,
     "indeed": IndeedAdapter,
+    "hiringcafe": HiringCafeAdapter,
 }

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agent-to-apply"
 version = "0.1.0"
-description = "Apply to matching jobs on Naukri, Instahyre, Wellfound and Indeed with a deterministic engine and near-zero LLM calls."
+description = "Apply to matching jobs on Naukri, LinkedIn, Instahyre, Wellfound, Indeed and HiringCafe with a deterministic engine and near-zero LLM calls."
 requires-python = ">=3.9"
 dependencies = [
     "playwright>=1.44",

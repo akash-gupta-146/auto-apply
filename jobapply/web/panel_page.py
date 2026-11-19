@@ -46,6 +46,10 @@ SITE_NOTES = {
                 "job, not a track record. Rehearse first, then apply for real with 1, and keep numbers small.",
     "wellfound": "Wellfound support has not been checked on the live site: its page layout may differ from what the program expects. \
 Rehearse first, and when you apply for real, start with 1 application.",
+    "hiringcafe": "HiringCafe is a job search, not an application form: every job is applied for on the employer's own website, so the AI agent "
+                   "always does the applying, whatever the box below says. Sign in to HiringCafe in the browser yourself (it uses a Google pop-up). "
+                   "The search and the hand-off have been checked on the live site; recording a sent job in your HiringCafe tracker has not been run "
+                   "on a real job yet. Rehearse first, then apply for real with 1.",
     "indeed": "Indeed forbids automation and often stops it with a human check, so expect to be asked to help and for "
               "jobs to be skipped. This only fills in Indeed's own application form: a job that sends you to the "
               "company's website is skipped. Reading jobs has worked on the live site, but Indeed's own application "

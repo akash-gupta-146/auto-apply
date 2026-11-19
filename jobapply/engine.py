@@ -413,6 +413,8 @@ class Engine:
         if result.status is Status.SKIPPED_EXTERNAL and result.elsewhere and self.external is not None:
             log.info("handing to the AI agent: %s @ %s (%s)", job.title, job.company, result.reason)
             result = self.external(job, max(0.0, (self.deadline - self.clock()) / 60))  # keeps the attempt if it really sent something
+        if result.status is Status.APPLIED and not self.dry_run:
+            self._tell_portal(job)
         if result.status in NOTHING_TRIED:
             self._give_back_attempt()  # nothing was pressed: a job that cannot be applied to must not use up the run's attempts
         result.score = decision.score
@@ -421,6 +423,13 @@ class Engine:
         elif decision.reason not in (MATCH, SUGGESTED):  # a looser fit than the roles asked for
             result.reason = f"[{decision.reason}] {result.reason}".strip()
         return result
+
+    def _tell_portal(self, job: Job) -> None:
+        """Let the portal record a sent application. It is a courtesy: whatever goes wrong here, the application WAS sent and stays applied."""
+        try:
+            self.adapter.applied(job)
+        except Exception:
+            log.warning("%s was applied for, but %s could not record it: mark it yourself if you want it there", job.url, self.adapter.name, exc_info=True)
 
     def _why(self, job: Job, decision: Decision) -> str:
         """Why a job was let through, in a sentence: shown to you before it is applied to, and written in the report after."""

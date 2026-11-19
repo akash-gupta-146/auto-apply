@@ -55,6 +55,7 @@ PORTAL_URLS = {
     "linkedin": "https://www.linkedin.com/login",
     "wellfound": "https://wellfound.com/login",
     "indeed": "https://secure.indeed.com/auth",
+    "hiringcafe": "https://hiringcafe.com/classic",  # it signs in through a Google pop-up: you do that yourself
 }
 
 
@@ -259,7 +260,7 @@ def cmd_run(args) -> None:
         if args.sync_resume:
             adapter.sync_resume(Path(profile.resume_path))
         handoff = None
-        if args.agent:  # a job the portal cannot apply to itself goes to the agent, in the same tab
+        if args.agent or adapter.applies_elsewhere:  # a job the portal cannot apply to itself goes to the agent, in the same tab (always, where nothing can be applied to on the site)
             build = agent_builder(profile, paths, db, book, ai, submit=not args.dry_run, ask_approval=not args.no_approval,
                                   answer_wait_s=criteria.answer_wait_s, guess=not args.no_guess)
             handoff = Handoff(adapter, paths, build)

@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, List
 
 from ..adapters.forms import LABEL_JS
+from .labels import GENERIC_NAME
 from .models import Element, Observation
 
 MAX_ELEMENTS = 150
@@ -31,11 +32,13 @@ SNAPSHOT_JS = """(base = 0) => {  // base: how many controls the page's other fr
     root.querySelectorAll('*').forEach(e => { if (e.shadowRoot) collect(e.shadowRoot, out); });
     return out;
   };
+  const GENERIC = new RegExp('__GENERIC__', 'i');
   const nameOf = e => {
     const role = e.getAttribute('role') || '', tag = e.tagName.toLowerCase();
-    let t = e.getAttribute('aria-label');
+    let t = '';
     const by = e.getAttribute('aria-labelledby');
-    if (!t && by) { const root = e.getRootNode(); t = by.split(/\\s+/).map(id => { const n = root.getElementById ? root.getElementById(id) : null; return n ? n.innerText : ''; }).join(' '); }
+    if (by) { const root = e.getRootNode(); t = by.split(/\\s+/).map(id => { const n = root.getElementById ? root.getElementById(id) : null; return n ? n.innerText : ''; }).join(' '); }
+    if (!t) { t = e.getAttribute('aria-label') || ''; if (GENERIC.test(t.trim())) t = ''; }  // "textbox" says what it is, not what it asks
     const words = ['button', 'a', 'summary'].includes(tag) || ['button', 'link', 'tab', 'option', 'radio', 'checkbox', 'switch', 'menuitem'].includes(role);
     if (!t && words) t = e.innerText || e.textContent;
     if (!t && tag === 'input' && ['submit', 'button', 'reset'].includes(e.type)) t = e.value;
@@ -136,7 +139,7 @@ SNAPSHOT_JS = """(base = 0) => {  // base: how many controls the page's other fr
     elements, job, alerts,
   };
 }"""
-SNAPSHOT_JS = SNAPSHOT_JS.replace("__LABEL_JS__", LABEL_JS).replace("__MAX_TEXT__", str(MAX_TEXT))
+SNAPSHOT_JS = SNAPSHOT_JS.replace("__GENERIC__", GENERIC_NAME.pattern).replace("__LABEL_JS__", LABEL_JS).replace("__MAX_TEXT__", str(MAX_TEXT))
 
 
 class PageUnreadable(RuntimeError):
